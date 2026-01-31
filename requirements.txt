@@ -1,0 +1,11 @@
+laspy[lazrs]
+numpy
+h5py
+pyyaml
+sharedarray
+open3d
+tensorboard
+tqdm
+scipy
+yapf
+addict
