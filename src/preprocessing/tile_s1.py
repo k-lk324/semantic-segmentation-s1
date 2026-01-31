@@ -1,97 +1,128 @@
 import laspy
 import numpy as np
 import torch
-import os
 import argparse
+import json
 from tqdm import tqdm
 from pathlib import Path
+from typing import Tuple, List
+
+DEFAULT_BLOCK_SIZE = 20.0
+DEFAULT_STRIDE = 10.0
+MIN_POINTS = 1000
 
 
-def normalize_intensity(intensity):
+def normalize_color(color: np.ndarray) -> np.ndarray:
     """
-    Normalizes FJD Trion S1 intensity (typically 16-bit or arbitrary range)
-    to [-1, 1] range for stability in Neural Networks.
+    Normalizes color to [-1, 1]. Detects 8-bit vs 16-bit automatically.
     """
+    max_val = color.max()
+    if max_val > 255:
+        # 16-bit case
+        return (color.astype(np.float32) / 65535.0 * 2) - 1
+    # 8-bit case
+    return (color.astype(np.float32) / 255.0 * 2) - 1
+
+
+def normalize_intensity(intensity: np.ndarray) -> np.ndarray:
+    """
+    Normalizes intensity to [-1, 1].
+    """
+    intensity = intensity.astype(np.float32)
     max_val = np.percentile(intensity, 99)
     min_val = np.min(intensity)
 
-    norm = (intensity - min_val) / (max_val - min_val + 1e-6)
-    norm = np.clip(norm, 0, 1)
+    div = max_val - min_val
+    if div == 0: div = 1.0
 
+    norm = (intensity - min_val) / div
+    norm = np.clip(norm, 0, 1)
     return (norm * 2) - 1
 
 
-def process_file(file_path,
-                 output_dir,
-                 block_size=20.0,
-                 stride=10.0,
-                 min_points=1000):
+def extract_features(las: laspy.LasData, point_count: int) -> np.ndarray:
     """
-    Process a LAS point cloud file into tiled blocks for semantic segmentation.
-    This function reads a LAS file, applies global coordinate shifting for precision,
-    and tiles the point cloud into overlapping blocks using a sliding window approach.
-    Each block is centered locally and saved with associated metadata.
-    Args:
-        file_path (str): Path to the input LAS file.
-        output_dir (str): Directory where output tiles will be saved as .pth files.
-        block_size (float, optional): Size of each tile block in XY plane. Defaults to 20.0.
-        stride (float, optional): Sliding window stride in XY plane. Defaults to 10.0.
-        min_points (int, optional): Minimum number of points required to create a tile.
-                                    Tiles with fewer points are skipped. Defaults to 1000.
+    Extracts and normalizes features (Intensity + RGB) from the LAS object.
     Returns:
-        None
-    Notes:
-        - Coordinates are globally shifted to (0,0,0) origin to prevent float32 precision loss.
-        - Intensity values are normalized if available; zeros are used as placeholders otherwise.
-        - Each tile block is centered locally around its block center.
-        - Output files are named as "{filename}_tile_{count:04d}.pth".
-        - Saved dictionary contains: coord, strength, grid_id, global_shift, and name keys.
+        np.ndarray: Matrix of shape (N, 4) -> [Intensity, R, G, B]
     """
-    filename = Path(file_path).stem
+    feats_list = []
 
+    if hasattr(las, 'intensity'):
+        intensity = np.array(las.intensity).reshape(-1, 1)
+        feats_list.append(normalize_intensity(intensity))
+    else:
+        # Fallback: Use zeros if intensity is missing
+        print("  [Warning] No intensity found. Using placeholders.")
+        feats_list.append(np.zeros((point_count, 1), dtype=np.float32))
+
+    if hasattr(las, 'red') and hasattr(las, 'green') and hasattr(las, 'blue'):
+        print("  [Info] Found RGB Color. Including in features.")
+        r = np.array(las.red).reshape(-1, 1)
+        g = np.array(las.green).reshape(-1, 1)
+        b = np.array(las.blue).reshape(-1, 1)
+        rgb = np.hstack([r, g, b])
+        feats_list.append(normalize_color(rgb))
+    else:
+        print("  [Info] No RGB Color found. Skipping color features.")
+        pass
+
+    return np.hstack(feats_list).astype(np.float32)
+
+
+def save_metadata(output_dir: Path, args: argparse.Namespace,
+                  coord_shift: np.ndarray):
+    """Saves run configuration for reproducibility"""
+    meta = vars(args)
+    meta['coord_shift'] = coord_shift.tolist()
+    meta['features_schema'] = ['intensity', 'red', 'green', 'blue']
+    with open(output_dir / "tiling_metadata.json", "w") as f:
+        json.dump(meta, f, indent=4)
+
+
+def process_file(file_path: Path,
+                 output_dir: Path,
+                 block_size: float = DEFAULT_BLOCK_SIZE,
+                 stride: float = DEFAULT_STRIDE,
+                 min_points: int = MIN_POINTS) -> np.ndarray:
+
+    filename = file_path.stem
     print(f"Loading {filename}...")
     las = laspy.read(file_path)
 
-    coords = np.vstack((las.x, las.y, las.z)).transpose().astype(np.float64)
-
-    if hasattr(las, 'intensity'):
-        intensity = np.array(las.intensity).reshape(-1, 1).astype(np.float32)
-        intensity = normalize_intensity(intensity)
-    else:
-        print("Warning: No intensity found. Using placeholder zeros.")
-        intensity = np.zeros((coords.shape[0], 1), dtype=np.float32)
+    coords = np.column_stack((las.x, las.y, las.z)).astype(np.float64)
+    features = extract_features(las, len(coords))
 
     coord_shift = coords.min(axis=0)
     coords -= coord_shift
 
     max_coord = coords.max(axis=0)
-
     grid_x = np.arange(0, max_coord[0], stride)
     grid_y = np.arange(0, max_coord[1], stride)
 
     print(
-        f"Tiling {filename} into {len(grid_x) * len(grid_y)} potential blocks..."
+        f"Tiling {len(coords)} points into {len(grid_x)}x{len(grid_y)} grid..."
     )
 
     count = 0
-    for x in tqdm(grid_x, leave=False):
+
+    for x in tqdm(grid_x, desc="Processing Strips", leave=False):
+        x_mask = (coords[:, 0] >= x) & (coords[:, 0] < x + block_size)
+        if np.sum(x_mask) < min_points:
+            continue
+
+        strip_coords = coords[x_mask]
+        strip_feats = features[x_mask]
+
         for y in grid_y:
-            # Define block boundaries
-            x_min, x_max = x, x + block_size
-            y_min, y_max = y, y + block_size
-
-            mask = (coords[:, 0] >= x_min) & (coords[:, 0] < x_max) & \
-                   (coords[:, 1] >= y_min) & (coords[:, 1] < y_max)
-
-            if np.sum(mask) < min_points:
+            y_mask = (strip_coords[:, 1] >= y) & (strip_coords[:, 1]
+                                                  < y + block_size)
+            if np.sum(y_mask) < min_points:
                 continue
 
-            # Extract data
-            block_coords = coords[mask].astype(np.float32)
-            block_feats = intensity[mask]
+            block_coords = strip_coords[y_mask].astype(np.float32)
+            block_feats = strip_feats[y_mask]
 
-            # Center the block (Local Coordinates) for the model
-            # But we keep the relative position for context if needed
             block_center = np.array(
                 [x + block_size / 2, y + block_size / 2, 0], dtype=np.float32)
             block_coords -= block_center
@@ -103,40 +134,40 @@ def process_file(file_path,
                 "global_shift": coord_shift,
                 "name": f"{filename}_tile_{count:04d}"
             }
-
-            save_path = os.path.join(output_dir,
-                                     f"{filename}_tile_{count:04d}.pth")
-            torch.save(save_dict, save_path)
+            torch.save(save_dict,
+                       output_dir / f"{filename}_tile_{count:04d}.pth")
             count += 1
 
     print(f"Finished. Created {count} tiles in {output_dir}")
+    return coord_shift
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description="LiDAR Tiling for Semantic Segmentation")
     parser.add_argument("--src",
                         type=str,
                         required=True,
-                        help="Path to raw .las file")
-    parser.add_argument("--dst",
-                        type=str,
-                        required=True,
-                        help="Folder to save .pth tiles")
+                        help="Path to input .las file")
+    parser.add_argument("--dst", type=str, required=True, help="Output folder")
     parser.add_argument("--block_size",
                         type=float,
-                        default=20.0,
-                        help="Size of tile in meters")
+                        default=DEFAULT_BLOCK_SIZE,
+                        help="Tile size (m)")
     parser.add_argument("--stride",
                         type=float,
-                        default=10.0,
-                        help="Step size (overlap = block - stride)")
+                        default=DEFAULT_STRIDE,
+                        help="Overlap stride (m)")
     parser.add_argument("--min_points",
                         type=int,
-                        default=1000,
-                        help="Minimum points per tile")
+                        default=MIN_POINTS,
+                        help="Filter empty tiles")
 
     args = parser.parse_args()
 
-    os.makedirs(args.dst, exist_ok=True)
-    process_file(args.src, args.dst, args.block_size, args.stride,
-                 args.min_points)
+    dst_path = Path(args.dst)
+    dst_path.mkdir(parents=True, exist_ok=True)
+
+    shift = process_file(Path(args.src), dst_path, args.block_size,
+                         args.stride, args.min_points)
+    save_metadata(dst_path, args, shift)
