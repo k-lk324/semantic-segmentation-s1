@@ -9,7 +9,7 @@ from pathlib import Path
 from tile_utils import extract_features, voxel_grid_subsampling, VOXEL_SIZE
 
 DEFAULT_BLOCK_SIZE = 20.0
-DEFAULT_STRIDE = 10.0
+DEFAULT_STRIDE = 10.0 # 50% of block size
 MIN_POINTS = 1000
 
 
