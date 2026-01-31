@@ -3,6 +3,7 @@ import numpy as np
 import torch
 import argparse
 import json
+import pandas as pd
 from tqdm import tqdm
 from pathlib import Path
 from typing import Tuple, List
@@ -10,6 +11,7 @@ from typing import Tuple, List
 DEFAULT_BLOCK_SIZE = 20.0
 DEFAULT_STRIDE = 10.0
 MIN_POINTS = 1000
+VOXEL_SIZE = 0.05  # 5cm
 
 
 def normalize_color(color: np.ndarray) -> np.ndarray:
@@ -70,6 +72,47 @@ def extract_features(las: laspy.LasData, point_count: int) -> np.ndarray:
     return np.hstack(feats_list).astype(np.float32)
 
 
+def voxel_grid_subsampling(
+        coords: np.ndarray,
+        features: np.ndarray,
+        voxel_size: float = VOXEL_SIZE) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Applies a voxel grid filter (5cm).
+    Calculates the barycenter (mean) of points within each voxel.
+    """
+    print(
+        f"  [Processing] Applying {voxel_size}m voxel filter to {len(coords)} points..."
+    )
+
+    # 1. Create a DataFrame to leverage optimized GroupBy
+    # Combining coords and features into one structure for grouping
+    # Features usually 1 (Intensity) or 4 (Int + RGB)
+    num_feat_cols = features.shape[1]
+    feat_col_names = [f'feat_{i}' for i in range(num_feat_cols)]
+
+    df = pd.DataFrame(coords, columns=['x', 'y', 'z'])
+    df_feats = pd.DataFrame(features, columns=feat_col_names)
+    df = pd.concat([df, df_feats], axis=1)
+
+    # 2. Calculate Voxel Indices
+    df['vx'] = (df['x'] / voxel_size).astype(np.int64)
+    df['vy'] = (df['y'] / voxel_size).astype(np.int64)
+    df['vz'] = (df['z'] / voxel_size).astype(np.int64)
+
+    # 3. Group by Voxel Index and compute Mean (Barycenter)
+    grouped = df.groupby(['vx', 'vy', 'vz'], as_index=False).mean()
+
+    # 4. Extract results
+    new_coords = grouped[['x', 'y', 'z']].values.astype(np.float32)
+    new_feats = grouped[feat_col_names].values.astype(np.float32)
+
+    print(
+        f"  [Processing] Reduced to {len(new_coords)} points ({(1 - len(new_coords)/len(coords))*100:.1f}% reduction)."
+    )
+
+    return new_coords, new_feats
+
+
 def save_metadata(output_dir: Path, args: argparse.Namespace,
                   coord_shift: np.ndarray):
     """Saves run configuration for reproducibility"""
@@ -93,12 +136,20 @@ def process_file(file_path: Path,
     coords = np.column_stack((las.x, las.y, las.z)).astype(np.float64)
     features = extract_features(las, len(coords))
 
-    coord_shift = coords.min(axis=0)
+    coord_shift = coords.mean(axis=0)
     coords -= coord_shift
+    print(f"  [Info] Centered data. Shift: {coord_shift}")
+
+    # Apply voxel filter to standardize density
+    coords, features = voxel_grid_subsampling(coords,
+                                              features,
+                                              voxel_size=VOXEL_SIZE)
 
     max_coord = coords.max(axis=0)
-    grid_x = np.arange(0, max_coord[0], stride)
-    grid_y = np.arange(0, max_coord[1], stride)
+    min_coord = coords.min(axis=0)  # Re-calc min after shift/subsample
+
+    grid_x = np.arange(min_coord[0], max_coord[0], stride)
+    grid_y = np.arange(min_coord[1], max_coord[1], stride)
 
     print(
         f"Tiling {len(coords)} points into {len(grid_x)}x{len(grid_y)} grid..."
