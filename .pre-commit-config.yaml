@@ -1,9 +1,20 @@
 repos:
--   repo: https://github.com/psf/black
-    rev: 23.3.0
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
     hooks:
-    -   id: black
--   repo: https://github.com/pycqa/flake8
-    rev: 6.0.0
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+        args: ['--maxkb=50000']  # Block files > 50MB
+
+  - repo: https://github.com/google/yapf
+    rev: v0.40.1
     hooks:
-    -   id: flake8
+      - id: yapf
+        name: yapf
+        description: "Auto-formats python code"
+        entry: yapf
+        language: python
+        types: [python]
+        args: ['-i']
