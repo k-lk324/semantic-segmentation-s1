@@ -10,3 +10,4 @@ scipy
 yapf
 addict
 laspy
+pandas
