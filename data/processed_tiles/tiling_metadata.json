@@ -1,12 +1,18 @@
 {
     "src": "data/raw_las/fh_parking.las",
-    "dst": "data/processed_tiles",
+    "dst": "data/processed_tiles/",
     "block_size": 20.0,
     "stride": 10.0,
     "min_points": 1000,
     "coord_shift": [
-        -17.447,
-        -16.936,
-        -3.1420000000000003
+        44.59768090460653,
+        36.6785659876257,
+        4.754623370769843
+    ],
+    "features_schema": [
+        "intensity",
+        "red",
+        "green",
+        "blue"
     ]
 }
