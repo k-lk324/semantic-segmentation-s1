@@ -28,10 +28,16 @@ clean:
 
 infer:
 	podman run --rm -it \
-		--device /dev/nvidia0 \
 		--security-opt=label=disable \
-		-v $(PWD):/workspace/project \
-		$(IMAGE_NAME) \
+		--device /dev/nvidia0 \
+		--device /dev/nvidiactl \
+		--device /dev/nvidia-uvm \
+		--device /dev/nvidia-modeset \
+		-v /usr/lib/x86_64-linux-gnu/libcuda.so.1:/usr/lib/x86_64-linux-gnu/libcuda.so.1:ro \
+		-v /usr/lib/x86_64-linux-gnu/libnvidia-ml.so.1:/usr/lib/x86_64-linux-gnu/libnvidia-ml.so.1:ro \
+		-v /usr/lib/x86_64-linux-gnu/libnvidia-ptxjitcompiler.so.1:/usr/lib/x86_64-linux-gnu/libnvidia-ptxjitcompiler.so.1:ro \
+		-v $(shell pwd):/workspace/project \
+		s1-segmentation \
 		python scripts/run_inference.py \
 		--config configs/s1_inference.py \
 		--weights weights/ptv3_nuscenes.pth \
