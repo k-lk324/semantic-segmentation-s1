@@ -5,7 +5,7 @@ from pathlib import Path
 
 def inspect(tile_path):
     print(f"--- Inspecting: {tile_path} ---")
-    data = data = torch.load(tile_path, weights_only=True)
+    data = torch.load(tile_path, weights_only=True)
 
     coords = data['coord']  # (N, 3)
     feats = data['features']  # (N, 4) or (N, 1)
@@ -56,6 +56,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     inspect(Path(args.tile_path))
-
-# python scripts/inspect_tile.py path/to/tile_file.pth
 

@@ -14,11 +14,15 @@ MIN_POINTS = 1000
 
 
 def save_metadata(output_dir: Path, args: argparse.Namespace,
-                  coord_shift: np.ndarray):
+                  coord_shift: np.ndarray) -> None:
     """Saves run configuration for reproducibility"""
     meta = vars(args)
     meta['coord_shift'] = coord_shift.tolist()
-    meta['features_schema'] = ['intensity', 'red', 'green', 'blue']
+    las = laspy.read(Path(args.src))
+    features_schema = ['intensity']
+    if hasattr(las, 'red') and hasattr(las, 'green') and hasattr(las, 'blue'):
+        features_schema.extend(['red', 'green', 'blue'])
+    meta['features_schema'] = features_schema
     with open(output_dir / "tiling_metadata.json", "w") as f:
         json.dump(meta, f, indent=4)
 
@@ -83,8 +87,7 @@ def process_file(file_path: Path,
             block_coords = strip_coords[y_mask].astype(np.float32)
             block_feats = strip_feats[y_mask]
 
-            block_center_z = float(
-            block_coords[:, 2].mean()) if block_coords.size > 0 else 0.0
+            block_center_z = float(block_coords[:, 2].mean())
             block_center = np.array(
                 [x + block_size / 2, y + block_size / 2, block_center_z],
                 dtype=np.float32)
@@ -94,7 +97,7 @@ def process_file(file_path: Path,
                 "coord": block_coords,
                 "features": block_feats,
                 "grid_id": np.array([x, y, block_center_z], dtype=np.float32),
-                "global_shift": coord_shift,
+                "global_shift": coord_shift.astype(np.float32),
                 "name": f"{filename}_tile_{count:04d}"
             }
             torch.save(save_dict,

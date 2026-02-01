@@ -25,7 +25,6 @@ def normalize_intensity(intensity: np.ndarray) -> np.ndarray:
     """
     Normalizes intensity to [-1, 1].
     """
-    intensity = intensity.astype(np.float32)
     if intensity.size == 0:
         return intensity
     intensity = intensity.astype(np.float32)
@@ -33,7 +32,8 @@ def normalize_intensity(intensity: np.ndarray) -> np.ndarray:
     min_val = np.min(intensity)
 
     div = max_val - min_val
-    if div == 0: div = 1.0
+    if div == 0:
+        div = 1.0
 
     norm = (intensity - min_val) / div
     norm = np.clip(norm, 0, 1)
@@ -44,7 +44,7 @@ def extract_features(las: laspy.LasData, point_count: int) -> np.ndarray:
     """
     Extracts and normalizes features (Intensity + RGB) from the LAS object.
     Returns:  
-        np.ndarray: Feature matrix of shape (N, F), where:  
+        np.ndarray: Feature matrix of shape (N, F), where:
             - F = 1 when only intensity is available -> [Intensity]  
             - F = 4 when intensity and RGB are available -> [Intensity, R, G, B]  
     """
@@ -67,7 +67,6 @@ def extract_features(las: laspy.LasData, point_count: int) -> np.ndarray:
         feats_list.append(normalize_color(rgb))
     else:
         print("  [Info] No RGB Color found. Skipping color features.")
-        pass
 
     return np.hstack(feats_list).astype(np.float32)
 
