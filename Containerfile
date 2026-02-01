@@ -4,9 +4,11 @@ FROM docker.io/pytorch/pytorch:2.5.1-cuda12.4-cudnn9-devel
 # System Dependencies
 ENV DEBIAN_FRONTEND=noninteractive
 RUN echo 'APT::Sandbox::User "root";' > /etc/apt/apt.conf.d/sandbox-disable
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1-mesa-glx \
     libglib2.0-0 \
+    libsparsehash-dev \
     && rm -rf /var/lib/apt/lists/*
 
 RUN conda install -y -c conda-forge git ninja wget
@@ -20,14 +22,16 @@ RUN pip install flash-attn --no-build-isolation
 RUN pip install torch-scatter torch-sparse torch-cluster \
     -f https://data.pyg.org/whl/torch-2.5.0+cu124.html
 
+RUN pip install spconv-cu124
 ENV CUDA_HOME=/usr/local/cuda
+
+ENV TORCH_CUDA_ARCH_LIST="8.0 8.6 8.9 9.0"
 
 WORKDIR /workspace/libs
 RUN git clone https://github.com/Pointcept/Pointcept.git && \
     cd Pointcept && \
-    # Install dependencies first to be safe
-    pip install --no-cache-dir -r requirements.txt && \
-    # Install Pointcept (not editable, fully compiled)
-    pip install -v .
+    if [ -d "libs/pointops" ]; then pip install libs/pointops; fi
+
+ENV PYTHONPATH="/workspace/libs/Pointcept:${PYTHONPATH}"
 
 WORKDIR /workspace/project
