@@ -22,6 +22,9 @@ RUN pip install flash-attn --no-build-isolation
 RUN pip install torch-scatter torch-sparse torch-cluster \
     -f https://data.pyg.org/whl/torch-2.7.0+cu128.html
 
+RUN pip install spconv-cu128
 ENV CUDA_HOME=/usr/local/cuda
+ENV TORCH_CUDA_ARCH_LIST="8.0 8.6 8.9 9.0"
+
 WORKDIR /workspace/project
 
