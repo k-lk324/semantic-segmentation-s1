@@ -24,3 +24,16 @@ dev:
 
 clean:
 	podman container prune -f
+
+
+infer:
+	podman run --rm -it \
+		--device /dev/nvidia0 \
+		--security-opt=label=disable \
+		-v $(PWD):/workspace/project \
+		$(IMAGE_NAME) \
+		python scripts/run_inference.py \
+		--config configs/s1_inference.py \
+		--weights weights/ptv3_nuscenes.pth \
+		--data_dir data/processed_tiles \
+		--output_dir data/predictions
