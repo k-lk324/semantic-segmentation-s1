@@ -9,6 +9,7 @@
         36.6785659876257,
         4.754623370769843
     ],
+    "voxel_size": 0.05,
     "features_schema": [
         "intensity",
         "red",

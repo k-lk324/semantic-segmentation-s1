@@ -24,3 +24,22 @@ dev:
 
 clean:
 	podman container prune -f
+
+
+infer:
+	podman run --rm -it \
+		--security-opt=label=disable \
+		--device /dev/nvidia0 \
+		--device /dev/nvidiactl \
+		--device /dev/nvidia-uvm \
+		--device /dev/nvidia-modeset \
+		-v /usr/lib/x86_64-linux-gnu/libcuda.so.1:/usr/lib/x86_64-linux-gnu/libcuda.so.1:ro \
+		-v /usr/lib/x86_64-linux-gnu/libnvidia-ml.so.1:/usr/lib/x86_64-linux-gnu/libnvidia-ml.so.1:ro \
+		-v /usr/lib/x86_64-linux-gnu/libnvidia-ptxjitcompiler.so.1:/usr/lib/x86_64-linux-gnu/libnvidia-ptxjitcompiler.so.1:ro \
+		-v $(shell pwd):/workspace/project \
+		s1-segmentation \
+		python scripts/run_inference.py \
+		--config configs/s1_inference.py \
+		--weights weights/ptv3_nuscenes.pth \
+		--data_dir data/processed_tiles \
+		--output_dir data/predictions

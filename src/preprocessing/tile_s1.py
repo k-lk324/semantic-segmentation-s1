@@ -6,10 +6,13 @@ import json
 from tqdm import tqdm
 from pathlib import Path
 
-from .tile_utils import extract_features, voxel_grid_subsampling, VOXEL_SIZE
+try:
+    from .tile_utils import extract_features, voxel_grid_subsampling, VOXEL_SIZE
+except ImportError:
+    from tile_utils import extract_features, voxel_grid_subsampling, VOXEL_SIZE
 
 DEFAULT_BLOCK_SIZE = 20.0
-DEFAULT_STRIDE = 10.0 # 50% of block size
+DEFAULT_STRIDE = 10.0  # 50% of block size
 MIN_POINTS = 1000
 
 
@@ -18,6 +21,7 @@ def save_metadata(output_dir: Path, args: argparse.Namespace,
     """Saves run configuration for reproducibility"""
     meta = vars(args)
     meta['coord_shift'] = coord_shift.tolist()
+    meta['voxel_size'] = VOXEL_SIZE
     las = laspy.read(Path(args.src))
     features_schema = ['intensity']
     if hasattr(las, 'red') and hasattr(las, 'green') and hasattr(las, 'blue'):

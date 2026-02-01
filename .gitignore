@@ -3,6 +3,7 @@
 *.laz
 *.pth
 *.ply
+weights/
 
 # System and Python
 __pycache__/
