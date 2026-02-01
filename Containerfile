@@ -22,9 +22,16 @@ RUN pip install flash-attn --no-build-isolation
 RUN pip install torch-scatter torch-sparse torch-cluster \
     -f https://data.pyg.org/whl/torch-2.7.0+cu128.html
 
-RUN pip install spconv-cu128
+RUN pip install spconv-cu124
+
+WORKDIR /workspace/libs
+RUN git clone https://github.com/Pointcept/Pointcept.git
+WORKDIR /workspace/libs/Pointcept/libs/pointops
+
+ENV TORCH_CUDA_ARCH_LIST="12.0"
 ENV CUDA_HOME=/usr/local/cuda
-ENV TORCH_CUDA_ARCH_LIST="8.0 8.6 8.9 9.0"
+
+RUN python setup.py install
+ENV PYTHONPATH="/workspace/libs/Pointcept:${PYTHONPATH}"
 
 WORKDIR /workspace/project
-
