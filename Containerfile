@@ -1,5 +1,5 @@
 # Base Image
-FROM docker.io/pytorch/pytorch:2.5.1-cuda12.4-cudnn9-devel
+FROM docker.io/pytorch/pytorch:2.7.0-cuda12.8-cudnn9-devel
 
 # System Dependencies
 ENV DEBIAN_FRONTEND=noninteractive
@@ -20,18 +20,7 @@ RUN pip install --no-cache-dir -r /tmp/requirements.txt
 # Specialized Libraries
 RUN pip install flash-attn --no-build-isolation
 RUN pip install torch-scatter torch-sparse torch-cluster \
-    -f https://data.pyg.org/whl/torch-2.5.0+cu124.html
-
-RUN pip install spconv-cu124
-ENV CUDA_HOME=/usr/local/cuda
-
-ENV TORCH_CUDA_ARCH_LIST="8.0 8.6 8.9 9.0"
-
-WORKDIR /workspace/libs
-RUN git clone https://github.com/Pointcept/Pointcept.git && \
-    cd Pointcept && \
-    if [ -d "libs/pointops" ]; then pip install libs/pointops; fi
-
-ENV PYTHONPATH="/workspace/libs/Pointcept:${PYTHONPATH}"
+    -f https://data.pyg.org/whl/torch-2.7.0+cu128.html
 
 WORKDIR /workspace/project
+
