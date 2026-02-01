@@ -9,3 +9,6 @@ tqdm
 scipy
 yapf
 addict
+laspy
+pandas
+matplotlib
