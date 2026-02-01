@@ -10,6 +10,9 @@ def normalize_color(color: np.ndarray) -> np.ndarray:
     """
     Normalizes color to [-1, 1]. Detects 8-bit vs 16-bit automatically.
     """
+    if color.size == 0:
+        return color.astype(np.float32)
+
     max_val = color.max()
     if max_val > 255:
         # 16-bit case
@@ -22,6 +25,9 @@ def normalize_intensity(intensity: np.ndarray) -> np.ndarray:
     """
     Normalizes intensity to [-1, 1].
     """
+    intensity = intensity.astype(np.float32)
+    if intensity.size == 0:
+        return intensity
     intensity = intensity.astype(np.float32)
     max_val = np.percentile(intensity, 99)
     min_val = np.min(intensity)
@@ -37,8 +43,10 @@ def normalize_intensity(intensity: np.ndarray) -> np.ndarray:
 def extract_features(las: laspy.LasData, point_count: int) -> np.ndarray:
     """
     Extracts and normalizes features (Intensity + RGB) from the LAS object.
-    Returns:
-        np.ndarray: Matrix of shape (N, 4) -> [Intensity, R, G, B]
+    Returns:  
+        np.ndarray: Feature matrix of shape (N, F), where:  
+            - F = 1 when only intensity is available -> [Intensity]  
+            - F = 4 when intensity and RGB are available -> [Intensity, R, G, B]  
     """
     feats_list = []
 
@@ -83,9 +91,9 @@ def voxel_grid_subsampling(
     df_feats = pd.DataFrame(features, columns=feat_col_names)
     df = pd.concat([df, df_feats], axis=1)
 
-    df['vx'] = (df['x'] / voxel_size).astype(np.int64)
-    df['vy'] = (df['y'] / voxel_size).astype(np.int64)
-    df['vz'] = (df['z'] / voxel_size).astype(np.int64)
+    df['vx'] = np.floor(df['x'] / voxel_size).astype(np.int64)
+    df['vy'] = np.floor(df['y'] / voxel_size).astype(np.int64)
+    df['vz'] = np.floor(df['z'] / voxel_size).astype(np.int64)
 
     grouped = df.groupby(['vx', 'vy', 'vz'], as_index=False).mean()
 

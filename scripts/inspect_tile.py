@@ -1,15 +1,14 @@
 import torch
-import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
 
 
 def inspect(tile_path):
     print(f"--- Inspecting: {tile_path} ---")
-    data = torch.load(tile_path)
+    data = data = torch.load(tile_path, weights_only=True)
 
     coords = data['coord']  # (N, 3)
-    feats = data['strength']  # (N, 4) or (N, 1)
+    feats = data['features']  # (N, 4) or (N, 1)
     grid_id = data['grid_id']
     global_shift = data['global_shift']
 
@@ -33,8 +32,10 @@ def inspect(tile_path):
     # Note: Barycenters can technically be closer, but average density should be lower.
     print(f"\n3. Geometry Check:")
     print(f"   - Tile Center: {coords.mean(axis=0)}")
-    print(f"   - Bounds X: [{coords[:,0].min():.2f}, {coords[:,0].max():.2f}]")
-    print(f"   - Bounds Y: [{coords[:,1].min():.2f}, {coords[:,1].max():.2f}]")
+    print(
+        f"   - Bounds X: [{coords[:, 0].min():.2f}, {coords[:, 0].max():.2f}]")
+    print(
+        f"   - Bounds Y: [{coords[:, 1].min():.2f}, {coords[:, 1].max():.2f}]")
 
     # Visual check (2D Projection)
     plt.figure(figsize=(10, 5))
@@ -42,9 +43,7 @@ def inspect(tile_path):
     plt.title(f"Tile {grid_id} (Top Down View)\nColor=Intensity")
     plt.axis('equal')
     plt.savefig(tile_path.with_suffix('.png'))
-    
-
-
+    plt.close()
 
 if __name__ == "__main__":
     import argparse
@@ -59,3 +58,4 @@ if __name__ == "__main__":
     inspect(Path(args.tile_path))
 
 # python scripts/inspect_tile.py path/to/tile_file.pth
+

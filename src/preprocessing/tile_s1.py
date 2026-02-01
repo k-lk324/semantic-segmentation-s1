@@ -6,7 +6,7 @@ import json
 from tqdm import tqdm
 from pathlib import Path
 
-from tile_utils import extract_features, voxel_grid_subsampling, VOXEL_SIZE
+from .tile_utils import extract_features, voxel_grid_subsampling, VOXEL_SIZE
 
 DEFAULT_BLOCK_SIZE = 20.0
 DEFAULT_STRIDE = 10.0 # 50% of block size
@@ -29,6 +29,15 @@ def process_file(file_path: Path,
                  stride: float = DEFAULT_STRIDE,
                  min_points: int = MIN_POINTS) -> np.ndarray:
 
+    # Validate tiling parameters to avoid invalid grids or unexpected behavior
+    if block_size <= 0:
+        raise ValueError(f"block_size must be positive, got {block_size}")
+    if stride <= 0:
+        raise ValueError(f"stride must be positive, got {stride}")
+    if stride > block_size:
+        raise ValueError(
+            f"stride ({stride}) must be less than or equal to block_size ({block_size})"
+        )
     filename = file_path.stem
     print(f"Loading {filename}...")
     las = laspy.read(file_path)
@@ -74,14 +83,17 @@ def process_file(file_path: Path,
             block_coords = strip_coords[y_mask].astype(np.float32)
             block_feats = strip_feats[y_mask]
 
+            block_center_z = float(
+            block_coords[:, 2].mean()) if block_coords.size > 0 else 0.0
             block_center = np.array(
-                [x + block_size / 2, y + block_size / 2, 0], dtype=np.float32)
+                [x + block_size / 2, y + block_size / 2, block_center_z],
+                dtype=np.float32)
             block_coords -= block_center
 
             save_dict = {
                 "coord": block_coords,
-                "strength": block_feats,
-                "grid_id": np.array([x, y]),
+                "features": block_feats,
+                "grid_id": np.array([x, y, block_center_z], dtype=np.float32),
                 "global_shift": coord_shift,
                 "name": f"{filename}_tile_{count:04d}"
             }
