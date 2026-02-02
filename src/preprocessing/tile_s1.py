@@ -58,9 +58,12 @@ def process_file(file_path: Path,
     print(f"  [Info] Centered data. Shift: {coord_shift}")
 
     # Apply voxel filter to standardize density
-    coords, features = voxel_grid_subsampling(coords,
-                                              features,
-                                              voxel_size=VOXEL_SIZE)
+    orig_indices = np.arange(coords.shape[0], dtype=np.int64)
+
+    coords, features, indices = voxel_grid_subsampling(coords,
+                                                       features,
+                                                       orig_indices,
+                                                       voxel_size=VOXEL_SIZE)
 
     max_coord = coords.max(axis=0)
     min_coord = coords.min(axis=0)  # Re-calc min after shift/subsample
@@ -97,9 +100,13 @@ def process_file(file_path: Path,
                 dtype=np.float32)
             block_coords -= block_center
 
+            strip_indices = indices[x_mask]
+            block_indices = strip_indices[y_mask]
+
             save_dict = {
                 "coord": block_coords,
                 "features": block_feats,
+                "indices": block_indices,
                 "grid_id": np.array([x, y, block_center_z], dtype=np.float32),
                 "global_shift": coord_shift.astype(np.float32),
                 "name": f"{filename}_tile_{count:04d}"

@@ -1,0 +1,19 @@
+{
+    "src": "data/raw_las/Fh_parking_outside_subsampled.las",
+    "dst": "data/processed_tiles_subsampled/",
+    "block_size": 20.0,
+    "stride": 10.0,
+    "min_points": 1000,
+    "coord_shift": [
+        49.091536542267285,
+        35.49935226305158,
+        8.21539315776239
+    ],
+    "voxel_size": 0.05,
+    "features_schema": [
+        "intensity",
+        "red",
+        "green",
+        "blue"
+    ]
+}

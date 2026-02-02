@@ -43,10 +43,10 @@ def normalize_intensity(intensity: np.ndarray) -> np.ndarray:
 def extract_features(las: laspy.LasData, point_count: int) -> np.ndarray:
     """
     Extracts and normalizes features (Intensity + RGB) from the LAS object.
-    Returns:  
+    Returns:
         np.ndarray: Feature matrix of shape (N, F), where:
-            - F = 1 when only intensity is available -> [Intensity]  
-            - F = 4 when intensity and RGB are available -> [Intensity, R, G, B]  
+            - F = 1 when only intensity is available -> [Intensity]
+            - F = 4 when intensity and RGB are available -> [Intensity, R, G, B]
     """
     feats_list = []
 
@@ -72,13 +72,17 @@ def extract_features(las: laspy.LasData, point_count: int) -> np.ndarray:
 
 
 def voxel_grid_subsampling(
-        coords: np.ndarray,
-        features: np.ndarray,
-        voxel_size: float = VOXEL_SIZE) -> Tuple[np.ndarray, np.ndarray]:
+    coords: np.ndarray,
+    features: np.ndarray,
+    orig_indices: np.ndarray,
+    voxel_size: float = VOXEL_SIZE
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Applies a voxel grid filter.
-    Calculates the barycenter (mean) of points within each voxel.
+    - Computes barycenters (mean coords + features) per voxel
+    - Preserves ONE representative original index per voxel
     """
+
     print(
         f"  [Processing] Applying {voxel_size}m voxel filter to {len(coords)} points..."
     )
@@ -88,19 +92,32 @@ def voxel_grid_subsampling(
 
     df = pd.DataFrame(coords, columns=['x', 'y', 'z'])
     df_feats = pd.DataFrame(features, columns=feat_col_names)
+
+    df['orig_idx'] = orig_indices
     df = pd.concat([df, df_feats], axis=1)
 
+    # Voxel coordinates
     df['vx'] = np.floor(df['x'] / voxel_size).astype(np.int64)
     df['vy'] = np.floor(df['y'] / voxel_size).astype(np.int64)
     df['vz'] = np.floor(df['z'] / voxel_size).astype(np.int64)
 
-    grouped = df.groupby(['vx', 'vy', 'vz'], as_index=False).mean()
+    # --- Barycenters ---
+    grouped_mean = df.groupby(['vx', 'vy', 'vz'], as_index=False).mean()
+
+    # --- Representative indices (FIRST point per voxel) ---
+    grouped_idx = (df.groupby(['vx', 'vy', 'vz'],
+                              as_index=False)['orig_idx'].first())
+
+    # Merge back
+    grouped = grouped_mean.merge(grouped_idx,
+                                 on=['vx', 'vy', 'vz'],
+                                 how='left')
 
     new_coords = grouped[['x', 'y', 'z']].values.astype(np.float32)
     new_feats = grouped[feat_col_names].values.astype(np.float32)
+    new_indices = grouped['orig_idx'].values.astype(np.int64)
 
-    print(
-        f"  [Processing] Reduced to {len(new_coords)} points ({(1 - len(new_coords)/len(coords))*100:.1f}% reduction)."
-    )
+    print(f"  [Processing] Reduced to {len(new_coords)} points "
+          f"({(1 - len(new_coords) / len(coords)) * 100:.1f}% reduction).")
 
-    return new_coords, new_feats
+    return new_coords, new_feats, new_indices
