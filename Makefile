@@ -43,3 +43,14 @@ infer:
 		--weights weights/ptv3_nuscenes.pth \
 		--data_dir data/processed_tiles \
 		--output_dir data/predictions
+
+reconstruct:
+	podman run --rm -it \
+		-v $(PWD):/workspace/project \
+		-v $(DATA_DIR):/workspace/project/data \
+		$(IMAGE_NAME) python scripts/vote_and_reconstruct.py \
+		--src_las data/raw_las/fh_parking.las \
+		--tiles_dir data/processed_tiles \
+		--pred_dir data/predictions \
+		--num_classes 16 \
+		--output_las data/final_scene_segmented.las

@@ -101,17 +101,16 @@ def voxel_grid_subsampling(
     df['vy'] = np.floor(df['y'] / voxel_size).astype(np.int64)
     df['vz'] = np.floor(df['z'] / voxel_size).astype(np.int64)
 
-    # --- Barycenters ---
-    grouped_mean = df.groupby(['vx', 'vy', 'vz'], as_index=False).mean()
-
-    # --- Representative indices (FIRST point per voxel) ---
-    grouped_idx = (df.groupby(['vx', 'vy', 'vz'],
-                              as_index=False)['orig_idx'].first())
-
-    # Merge back
-    grouped = grouped_mean.merge(grouped_idx,
-                                 on=['vx', 'vy', 'vz'],
-                                 how='left')
+    grouped = (df.groupby(['vx', 'vy', 'vz'], as_index=False).agg({
+        'x': 'mean',
+        'y': 'mean',
+        'z': 'mean',
+        **{
+            col: 'mean'
+            for col in feat_col_names
+        },
+        'orig_idx': 'first',
+    }))
 
     new_coords = grouped[['x', 'y', 'z']].values.astype(np.float32)
     new_feats = grouped[feat_col_names].values.astype(np.float32)

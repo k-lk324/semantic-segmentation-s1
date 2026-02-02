@@ -1,125 +1,95 @@
 import torch
 import numpy as np
 import laspy
-import os
-import glob
-from tqdm import tqdm
 import argparse
+from pathlib import Path
+from tqdm import tqdm
 
-# NuScenes Color Palette (16 Classes)
-# We map these to RGB (0-255) for visualization
-COLOR_MAP = {
-    0: [255, 120, 50],  # barrier (Orange)
-    1: [255, 192, 203],  # bicycle (Pink)
-    2: [255, 255, 0],  # bus (Yellow)
-    3: [0, 0, 255],  # car (Blue)
-    4: [0, 255, 255],  # construction_vehicle (Cyan)
-    5: [255, 0, 0],  # motorcycle (Red)
-    6: [255, 240, 150],  # pedestrian (Light Yellow)
-    7: [135, 60, 0],  # traffic_cone (Brown)
-    8: [160, 32, 240],  # trailer (Purple)
-    9: [255, 61, 99],  # truck (Red)
-    10: [175, 240, 255],  # driveable_surface (Light Blue)
-    11: [75, 0, 75],  # other_flat (Dark Purple)
-    12: [75, 0, 175],  # sidewalk (Violet)
-    13: [150, 240, 80],  # terrain (Grass Green)
-    14: [230, 230, 250],  # manmade (Light Gray)
-    15: [0, 175, 0],  # vegetation (Dark Green)
-}
+from src.preprocessing.tile_utils import voxel_grid_subsampling, extract_features, VOXEL_SIZE
+
+
+def softmax(x):
+    x = x - np.max(x, axis=1, keepdims=True)
+    exp_x = np.exp(x)
+    return exp_x / np.sum(exp_x, axis=1, keepdims=True)
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_dir",
-                        required=True,
-                        help="Path to processed_tiles")
-    parser.add_argument("--pred_dir",
-                        required=True,
-                        help="Path to predictions")
-    parser.add_argument("--output",
-                        required=True,
-                        help="Output .las file path")
+    parser.add_argument("--src_las", required=True)
+    parser.add_argument("--tiles_dir", required=True)
+    parser.add_argument("--pred_dir", required=True)
+    parser.add_argument("--num_classes", type=int, required=True)
+    parser.add_argument("--output_las", required=True)
     args = parser.parse_args()
 
-    # Find matches
-    tile_files = sorted(glob.glob(os.path.join(args.data_dir, "*.pth")))
+    print("[Load] Reading original LAS...")
+    las = laspy.read(args.src_las)
 
-    all_points = []
-    all_labels = []
-    all_colors = []
+    coords = np.column_stack((las.x, las.y, las.z)).astype(np.float64)
+    features = extract_features(las, len(coords))
+    orig_indices = np.arange(len(coords), dtype=np.int64)
 
-    print(f"Reconstructing {len(tile_files)} tiles...")
+    print("[Rebuild] Applying voxel subsampling...")
+    coords, features, subsample_orig_indices = voxel_grid_subsampling(
+        coords, features, orig_indices, VOXEL_SIZE)
+
+    N = coords.shape[0]
+    C = args.num_classes
+
+    print(f"[Init] Global subsampled points: {N}")
+
+    # Build mapping from original index -> subsampled index (via sorting)
+    sorted_order = np.argsort(subsample_orig_indices)
+    sorted_orig = subsample_orig_indices[sorted_order]
+
+    global_probs = np.zeros((N, C), dtype=np.float32)
+    global_counts = np.zeros(N, dtype=np.int32)
+
+    tile_files = sorted(Path(args.tiles_dir).glob("*.pth"))
 
     for tile_path in tqdm(tile_files):
-        tile_name = os.path.basename(tile_path)
-        pred_path = os.path.join(args.pred_dir, tile_name)
-
-        if not os.path.exists(pred_path):
-            print(f"Warning: No prediction found for {tile_name}")
+        pred_path = Path(args.pred_dir) / tile_path.name
+        if not pred_path.exists():
             continue
 
-        data = torch.load(tile_path, weights_only=False)
-        logits = torch.load(pred_path, weights_only=False)  # shape (N, 16)
+        tile = torch.load(tile_path, weights_only=False)
+        logits = torch.load(pred_path).numpy()
 
-        local_coord = data["coord"]
+        indices = np.asarray(tile["indices"], dtype=np.int64)
+        probs = softmax(logits)
 
-        final_coord = local_coord
+        pos = np.searchsorted(sorted_orig, indices)
+        valid = (pos < len(sorted_orig)) & (sorted_orig[pos] == indices)
+        if not np.all(valid):
+            indices = indices[valid]
+            probs = probs[valid]
+            pos = pos[valid]
 
-        if "grid_id" in data:
+        mapped_indices = sorted_order[pos]
 
-            grid_id = data["grid_id"]
-            if isinstance(grid_id, torch.Tensor): grid_id = grid_id.numpy()
+        global_probs[mapped_indices] += probs
+        global_counts[mapped_indices] += 1
 
-            block_size = getattr(args, "block_size", 20.0)
-            block_center = np.array([
-                grid_id[0] + block_size / 2, grid_id[1] + block_size / 2,
-                grid_id[2]
-            ])
-            final_coord = final_coord + block_center
+    valid = global_counts > 0
+    global_probs[valid] /= global_counts[valid, None]
 
-        if "global_shift" in data:
-            final_coord = final_coord + data["global_shift"]
+    labels = np.full(N, -1, dtype=np.int32)
+    labels[valid] = np.argmax(global_probs[valid], axis=1)
 
-        all_points.append(final_coord)
+    out = laspy.LasData(las.header)
+    out.points = laspy.ScaleAwarePointRecord.zeros(len(coords),
+                                                   header=las.header)
+    out.x = coords[:, 0]
+    out.y = coords[:, 1]
+    out.z = coords[:, 2]
 
-        labels = torch.argmax(logits, dim=1).cpu().numpy()
-        all_labels.append(labels)
+    out.add_extra_dim(
+        laspy.ExtraBytesParams(name="semantic_label", type=np.int32))
+    out.semantic_label = labels
 
-        colors = np.zeros((len(labels), 3), dtype=np.uint8)
-        for cls_id, rgb in COLOR_MAP.items():
-            colors[labels == cls_id] = rgb
-        all_colors.append(colors)
-
-    if not all_points:
-        print("No data found!")
-        return
-
-    print("Merging tiles...")
-    points_cat = np.concatenate(all_points, axis=0)
-    labels_cat = np.concatenate(all_labels, axis=0)
-    colors_cat = np.concatenate(all_colors, axis=0)
-
-    print(f"Saving {len(points_cat)} points to {args.output}...")
-    header = laspy.LasHeader(point_format=3, version="1.2")
-    header.scales = [0.001, 0.001, 0.001]  # 1mm precision
-
-    offset = np.min(points_cat, axis=0)
-    header.offset = offset
-
-    las = laspy.LasData(header)
-    las.x = points_cat[:, 0]
-    las.y = points_cat[:, 1]
-    las.z = points_cat[:, 2]
-
-    las.classification = labels_cat.astype(np.uint8)
-
-    las.red = colors_cat[:, 0].astype(
-        np.uint16) * 256  # laspy expects 16-bit color
-    las.green = colors_cat[:, 1].astype(np.uint16) * 256
-    las.blue = colors_cat[:, 2].astype(np.uint16) * 256
-
-    las.write(args.output)
-    print("Done!")
+    out.write(args.output_las)
+    print(f"[Done] Saved voxelized segmented cloud {args.output_las}")
 
 
 if __name__ == "__main__":
