@@ -6,10 +6,10 @@ HOST_LIBCUDA = /lib/x86_64-linux-gnu/libcuda.so.1
 HOST_NVML = /lib/x86_64-linux-gnu/libnvidia-ml.so.1
 
 build:
-	podman build -t $(IMAGE_NAME) -f Containerfile .
+	docker build -t $(IMAGE_NAME) -f Containerfile .
 
 dev:
-	podman run -it --rm \
+	docker run -it --rm --user 1003:1003 \
 		--device /dev/nvidia0 \
 		--device /dev/nvidiactl \
 		--device /dev/nvidia-uvm \
@@ -23,11 +23,10 @@ dev:
 		$(IMAGE_NAME) /bin/bash
 
 clean:
-	podman container prune -f
-
+	docker container prune -f
 
 infer:
-	podman run --rm -it \
+	docker run --rm -it --user 1003:1003 \
 		--security-opt=label=disable \
 		--device /dev/nvidia0 \
 		--device /dev/nvidiactl \
@@ -45,12 +44,11 @@ infer:
 		--output_dir data/predictions
 
 reconstruct:
-	podman run --rm -it \
-		-v $(PWD):/workspace/project \
-		-v $(DATA_DIR):/workspace/project/data \
+	docker run --rm --user 1003:1003 \
+		-v $(shell pwd):/workspace/project \
 		$(IMAGE_NAME) python scripts/vote_and_reconstruct.py \
-		--src_las data/raw_las/fh_parking.las \
+		--src_las data/raw_las/dummy_pointcloud.las \
 		--tiles_dir data/processed_tiles \
 		--pred_dir data/predictions \
 		--num_classes 16 \
-		--output_las data/final_scene_segmented.las
+		--output_las data/reconstructed.las

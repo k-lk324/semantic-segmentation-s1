@@ -1,13 +1,13 @@
 {
-    "src": "data/raw_las/fh_parking.las",
+    "src": "data/dummy_pointcloud.las",
     "dst": "data/processed_tiles/",
     "block_size": 20.0,
     "stride": 10.0,
-    "min_points": 1000,
+    "min_points": 100,
     "coord_shift": [
-        44.59768090460653,
-        36.6785659876257,
-        4.754623370769843
+        49.41593299999998,
+        50.45293400000007,
+        25.002492000000068
     ],
     "voxel_size": 0.05,
     "features_schema": [
