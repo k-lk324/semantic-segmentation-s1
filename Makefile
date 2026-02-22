@@ -42,3 +42,12 @@ infer:
 		--weights weights/ptv3_nuscenes.pth \
 		--data_dir data/processed_tiles \
 		--output_dir data/predictions
+
+reconstruct:
+	docker run --rm --user 1003:1003 \
+		-v $(shell pwd):/workspace/project \
+		$(IMAGE_NAME) \
+		python scripts/reconstruct_pointcloud.py \
+		--predictions data/predictions \
+		--tiles data/processed_tiles \
+		--output data/reconstructed.las

@@ -1,202 +1,100 @@
 # Semantic Segmentation for Sentinel-1 SAR Data
 
-A semantic segmentation framework for Sentinel-1 Synthetic Aperture Radar (SAR) data processing. This project provides tools for preprocessing point cloud data, inference using deep learning models, and containerized deployment.
+Point cloud semantic segmentation pipeline built on [Pointcept](https://github.com/Pointcept/Pointcept). Processes LAS/LAZ files through tiling → inference → reconstruction.
 
-## Overview
-
-This repository contains a complete pipeline for semantic segmentation tasks, built on top of the Pointcept framework. It includes:
-
-- **Preprocessing**: Tiling and feature extraction from LAS point cloud files
-- **Inference**: Model inference on processed tiles using PyTorch
-- **Containerization**: Docker/Podman support for reproducible environments with GPU acceleration
-
-## Project Structure
-
-```
-semantic-segmentation-s1/
-├── configs/                      # Model configuration files
-│   └── s1_inference.py          # Inference configuration (16 semantic classes)
-├── data/
-│   └── processed_tiles/          # Directory for processed tile data
-│       └── tiling_metadata.json  # Metadata from tiling process
-├── scripts/                       # Executable scripts
-│   ├── run_inference.py          # Main inference script
-│   └── inspect_tile.py           # Utility for inspecting tile data
-├── src/
-│   └── preprocessing/             # Preprocessing utilities
-│       ├── tile_s1.py            # Main tiling script for LAS files
-│       └── tile_utils.py         # Helper functions for tiling
-├── Containerfile                 # Container definition for Podman/Docker
-├── Makefile                      # Build and deployment commands
-└── requirements.txt              # Python dependencies
-```
-
-## Features
-
-### Semantic Classes
-
-The model supports 16 semantic classes:
-- barrier, bicycle, bus, car, construction_vehicle
-- motorcycle, pedestrian, traffic_cone, trailer, truck
-- driveable_surface, other_flat, sidewalk, terrain, manmade
-- vegetation
-
-### Key Dependencies
-
-- **PyTorch & PyTorch Geometric**: Deep learning framework
-- **Open3D**: Point cloud processing
-- **LASpy**: LAS/LAZ point cloud file I/O
-- **Pointcept**: Core segmentation framework
-- **PEFT**: Parameter-Efficient Fine-Tuning
-- **Weights & Biases (wandb)**: Experiment tracking
-- **TensorBoard**: Visualization
-
-## Installation
-
-### Local Setup
+## Quick Start
 
 ```bash
-pip install -r requirements.txt
-```
-
-### Container Setup
-
-Build the container image:
-
-```bash
+# Build container
 make build
+
+# Create test data
+docker run --rm --user $(id -u):$(id -g) -v $(pwd):/workspace/project \
+  s1-segmentation python scripts/create_dummy_pointcloud.py
+
+# Run full pipeline
+docker run --rm --user $(id -u):$(id -g) -v $(pwd):/workspace/project \
+  s1-segmentation python src/preprocessing/tile_s1.py \
+  --src data/dummy_pointcloud.las --dst data/processed_tiles/ --min_points 100
+
+make infer  # Requires model weights
+make reconstruct
 ```
 
-## Usage
+## Pipeline
 
-### Preprocessing: Tiling Point Cloud Data
-
-Convert raw LAS point cloud files into tiles:
+### 1. Preprocessing (Tiling)
+Split large point clouds into overlapping tiles:
 
 ```bash
-python src/preprocessing/tile_s1.py \
-  --src <path_to_las_file> \
-  --output_dir data/processed_tiles/ \
+docker run --rm --user $(id -u):$(id -g) -v $(pwd):/workspace/project \
+  s1-segmentation python src/preprocessing/tile_s1.py \
+  --src <input.las> \
+  --dst data/processed_tiles/ \
   --block_size 20.0 \
-  --stride 10.0
+  --stride 10.0 \
+  --min_points 100
 ```
 
-**Parameters:**
-- `--src`: Path to input LAS/LAZ file
-- `--output_dir`: Output directory for tiles
-- `--block_size`: Size of tiles in meters (default: 20.0)
-- `--stride`: Overlap stride in meters (default: 10.0)
+Outputs:
+- Voxelized tiles (`.pth` format)
+- `tiling_metadata.json` with coordinate shift and feature schema
 
-The tiling process generates:
-- Voxelized point cloud tiles
-- `tiling_metadata.json` with configuration and feature schema
-
-### Inference
-
-Run semantic segmentation inference:
-
-```bash
-python scripts/run_inference.py \
-  --config configs/s1_inference.py \
-  --weights <path_to_model_weights> \
-  --data_dir data/processed_tiles/ \
-  --output_dir results/
-```
-
-**Parameters:**
-- `--config`: Path to inference configuration file
-- `--weights`: Path to pretrained model weights
-- `--data_dir`: Directory containing processed tiles
-- `--output_dir`: Directory for inference results
-
-### Inspect Tiles
-
-Examine processed tile data:
-
-```bash
-python scripts/inspect_tile.py <tile_file>
-```
-
-## Container-Based Workflow
-
-### Development with GPU
-
-Launch an interactive development container with GPU support:
-
-```bash
-make dev
-```
-
-This mounts:
-- Project directory at `/workspace/project`
-- Data directory at `/workspace/project/data`
-- GPU devices and libraries
-
-### Running Inference in Container
+### 2. Inference
+Run semantic segmentation on tiles:
 
 ```bash
 make infer
 ```
 
-### Clean Up Containers
+Requires model weights at `weights/ptv3_nuscenes.pth`. Configure in [configs/s1_inference.py](configs/s1_inference.py).
+
+### 3. Reconstruction
+Merge predicted tiles back into full point cloud:
 
 ```bash
-make clean
+make reconstruct
+```
+
+Uses majority voting for overlapping regions. Output: `data/reconstructed.las`
+
+## Semantic Classes
+
+16 classes: barrier, bicycle, bus, car, construction_vehicle, motorcycle, pedestrian, traffic_cone, trailer, truck, driveable_surface, other_flat, sidewalk, terrain, manmade, vegetation
+
+## Utilities
+
+**Create dummy data:**
+```bash
+docker run --rm --user $(id -u):$(id -g) -v $(pwd):/workspace/project \
+  s1-segmentation python scripts/create_dummy_pointcloud.py \
+  --output data/test.las --num-points 10000
+```
+
+**Inspect tiles:**
+```bash
+docker run --rm --user $(id -u):$(id -g) -v $(pwd):/workspace/project \
+  s1-segmentation python scripts/inspect_tile.py data/processed_tiles/tile_0000.pth
+```
+
+**Development shell:**
+```bash
+make dev
 ```
 
 ## Configuration
 
-### Model Configuration
+Edit [configs/s1_inference.py](configs/s1_inference.py):
+- `model.backbone.in_channels`: Input feature dimensions (default: 4 for x,y,z,intensity)
+- `data.num_classes`: Number of semantic classes (16)
+- `batch_size`, `num_worker`: Processing parameters
 
-Edit [configs/s1_inference.py](configs/s1_inference.py) to customize:
-- Model backbone parameters
-- Input/output dimensions
-- Loss functions
-- Batch size and number of workers
-- Class names and ignore indices
+## Requirements
 
-Example override:
-
-```python
-model = dict(
-    backbone=dict(in_channels=4),
-    criteria=[dict(type="CrossEntropyLoss", loss_weight=1.0, ignore_index=-1)]
-)
-```
-
-## System Requirements
-
-- **GPU**: NVIDIA GPU with CUDA support (recommended)
-- **Memory**: 32GB+ (default container allocation)
-- **Storage**: Sufficient space for raw LAS files and processed tiles
-- **Docker/Podman**: For containerized workflows
-
-## Development
-
-### Code Formatting
-
-The project uses `yapf` for Python code formatting. Format your code with:
-
-```bash
-yapf --in-place <file.py>
-```
-
-### Experiment Tracking
-
-Use Weights & Biases for experiment tracking:
-
-```bash
-wandb login
-# Experiments will be logged automatically during training/inference
-```
+- Docker/Podman
+- NVIDIA GPU with CUDA support (for inference)
+- Python dependencies in [requirements.txt](requirements.txt) (laspy, torch, open3d, etc.)
 
 ## License
 
-See [LICENSE](LICENSE) for details.
-
-## References
-
-This project builds upon:
-- [Pointcept](https://github.com/Pointcept/Pointcept) - Point cloud segmentation framework
-- [LASpy](https://laspy.readthedocs.io/) - LAS/LAZ file handling
-- [Open3D](http://www.open3d.org/) - 3D data processing
+See [LICENSE](LICENSE)

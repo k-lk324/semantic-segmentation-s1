@@ -26,22 +26,23 @@ def load_metadata(tiles_dir: Path):
     return metadata
 
 
-def reconstruct_from_tiles(predictions_dir: Path, metadata_dir: Path, 
+def reconstruct_from_tiles(predictions_dir: Path, tiles_dir: Path, 
                            output_path: Path, voting: bool = True):
     """
     Reconstruct full point cloud from tile predictions.
     
     Args:
-        predictions_dir: Directory containing predicted tile .pth files
-        metadata_dir: Directory containing tiling_metadata.json
+        predictions_dir: Directory containing predicted tile .pth files (logits)
+        tiles_dir: Directory containing original tiles and tiling_metadata.json
         output_path: Output LAS file path
         voting: If True, use majority voting for overlapping regions
     """
     # Load metadata
-    metadata = load_metadata(metadata_dir)
+    metadata = load_metadata(tiles_dir)
     coord_shift = np.array(metadata['coord_shift'])
     
     print(f"Loading predictions from: {predictions_dir}")
+    print(f"Loading original tiles from: {tiles_dir}")
     print(f"Coordinate shift: {coord_shift}")
     
     # Collect all prediction files
@@ -59,14 +60,32 @@ def reconstruct_from_tiles(predictions_dir: Path, metadata_dir: Path,
     
     # Load all tiles and accumulate predictions
     for pred_file in tqdm(pred_files, desc="Loading tiles"):
-        data = torch.load(pred_file, weights_only=False)
+        # Load prediction logits
+        logits = torch.load(pred_file, weights_only=False)
+        
+        # Convert logits to class predictions
+        if logits.dim() == 2:
+            predictions = torch.argmax(logits, dim=1).numpy()
+        else:
+            predictions = logits.numpy()
+        
+        # Load corresponding original tile for coordinates and features
+        tile_file = tiles_dir / pred_file.name
+        if not tile_file.exists():
+            print(f"Warning: Original tile not found: {tile_file}")
+            continue
+        
+        tile_data = torch.load(tile_file, weights_only=False)
         
         # Extract data
-        coords = data['coord']  # Shape: (N, 3)
-        predictions = data['pred']  # Shape: (N,) - predicted class per point
+        coords = tile_data['coord']  # Shape: (N, 3)
+        if torch.is_tensor(coords):
+            coords = coords.numpy()
         
         # Optional: extract features if available
-        features = data.get('features', None)
+        features = tile_data.get('features', None)
+        if features is not None and torch.is_tensor(features):
+            features = features.numpy()
         
         # Restore original coordinates
         original_coords = coords + coord_shift
@@ -151,13 +170,13 @@ if __name__ == "__main__":
         "--predictions",
         type=str,
         required=True,
-        help="Directory containing predicted tile .pth files"
+        help="Directory containing predicted tile .pth files (logits)"
     )
     parser.add_argument(
-        "--metadata",
+        "--tiles",
         type=str,
         required=True,
-        help="Directory containing tiling_metadata.json"
+        help="Directory containing original tiles and tiling_metadata.json"
     )
     parser.add_argument(
         "--output",
@@ -176,7 +195,7 @@ if __name__ == "__main__":
     
     reconstruct_from_tiles(
         Path(args.predictions),
-        Path(args.metadata),
+        Path(args.tiles),
         Path(args.output),
         voting=args.voting
     )
