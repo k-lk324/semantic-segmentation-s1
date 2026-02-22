@@ -25,6 +25,17 @@ dev:
 clean:
 	docker container prune -f
 
+tile:
+	rm -rf data/processed_tiles
+	mkdir -p data/processed_tiles
+	docker run --rm --user 1003:1003 \
+		-v $(shell pwd):/workspace/project \
+		$(IMAGE_NAME) \
+		python src/preprocessing/tile_s1.py \
+		--src data/raw_las/dummy_pointcloud.las \
+		--dst data/processed_tiles \
+		--min_points 100
+
 infer:
 	docker run --rm -it --user 1003:1003 \
 		--security-opt=label=disable \

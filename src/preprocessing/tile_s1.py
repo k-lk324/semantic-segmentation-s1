@@ -60,7 +60,7 @@ def process_file(file_path: Path,
     # Apply voxel filter to standardize density
     orig_indices = np.arange(coords.shape[0], dtype=np.int64)
 
-    coords, features, indices = voxel_grid_subsampling(coords,
+    coords, features, voxel_indices = voxel_grid_subsampling(coords,
                                                        features,
                                                        orig_indices,
                                                        voxel_size=VOXEL_SIZE)
@@ -84,6 +84,7 @@ def process_file(file_path: Path,
 
         strip_coords = coords[x_mask]
         strip_feats = features[x_mask]
+        strip_indices = voxel_indices[x_mask]
 
         for y in grid_y:
             y_mask = (strip_coords[:, 1] >= y) & (strip_coords[:, 1]
@@ -93,15 +94,13 @@ def process_file(file_path: Path,
 
             block_coords = strip_coords[y_mask].astype(np.float32)
             block_feats = strip_feats[y_mask]
+            block_indices = strip_indices[y_mask]
 
             block_center_z = float(block_coords[:, 2].mean())
             block_center = np.array(
                 [x + block_size / 2, y + block_size / 2, block_center_z],
                 dtype=np.float32)
             block_coords -= block_center
-
-            strip_indices = indices[x_mask]
-            block_indices = strip_indices[y_mask]
 
             save_dict = {
                 "coord": block_coords,

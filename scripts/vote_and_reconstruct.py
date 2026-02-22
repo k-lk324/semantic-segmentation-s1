@@ -48,14 +48,21 @@ def main():
 
     tile_files = sorted(Path(args.tiles_dir).glob("*.pth"))
 
-    for tile_path in tqdm(tile_files):
+    for tile_path in tqdm(tile_files, desc="Accumulating predictions"):
         pred_path = Path(args.pred_dir) / tile_path.name
         if not pred_path.exists():
+            print(f"\n[Warning] Prediction not found: {pred_path.name}")
             continue
 
         tile = torch.load(tile_path, weights_only=False)
         logits = torch.load(pred_path).numpy()
 
+        if "indices" not in tile:
+            raise KeyError(
+                f"Tile {tile_path.name} missing 'indices' key. "
+                "Please re-run preprocessing with updated tile_s1.py"
+            )
+        
         indices = np.asarray(tile["indices"], dtype=np.int64)
         probs = softmax(logits)
 
@@ -83,13 +90,32 @@ def main():
     out.x = coords[:, 0]
     out.y = coords[:, 1]
     out.z = coords[:, 2]
+    
+    # Preserve intensity and RGB if available
+    if features.shape[1] >= 1:
+        out.intensity = features[:, 0].astype(np.uint16)
+    if features.shape[1] >= 4:
+        out.red = features[:, 1].astype(np.uint16)
+        out.green = features[:, 2].astype(np.uint16)
+        out.blue = features[:, 3].astype(np.uint16)
 
     out.add_extra_dim(
         laspy.ExtraBytesParams(name="semantic_label", type=np.int32))
     out.semantic_label = labels
 
     out.write(args.output_las)
-    print(f"[Done] Saved voxelized segmented cloud {args.output_las}")
+    
+    # Print statistics
+    print(f"\nReconstruction complete!")
+    print(f"  Output: {args.output_las}")
+    print(f"  Total points: {len(coords):,}")
+    print(f"  Points with predictions: {np.sum(valid):,} ({100*np.sum(valid)/len(coords):.1f}%)")
+    
+    print(f"\nClass distribution:")
+    unique, counts = np.unique(labels[valid], return_counts=True)
+    for cls, count in zip(unique, counts):
+        percentage = 100 * count / np.sum(valid)
+        print(f"  Class {cls:2d}: {count:7,} points ({percentage:5.1f}%)")
 
 
 if __name__ == "__main__":
