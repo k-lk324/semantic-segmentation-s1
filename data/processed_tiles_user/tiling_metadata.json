@@ -1,6 +1,6 @@
 {
     "src": "data/dummy_pointcloud.las",
-    "dst": "data/processed_tiles/",
+    "dst": "data/processed_tiles_user/",
     "block_size": 20.0,
     "stride": 10.0,
     "min_points": 100,
