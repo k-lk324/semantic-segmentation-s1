@@ -75,7 +75,7 @@ def main():
             continue
 
         tile = torch.load(tile_path, weights_only=False)
-        logits = torch.load(pred_path).numpy()
+        logits = torch.load(pred_path).numpy().astype(np.float32)
 
         if "indices" not in tile:
             raise KeyError(
@@ -111,13 +111,15 @@ def main():
     out.y = coords[:, 1]
     out.z = coords[:, 2]
     
-    # Preserve intensity and RGB if available
-    if features.shape[1] >= 1:
-        out.intensity = features[:, 0].astype(np.uint16)
-    if features.shape[1] >= 4:
-        out.red = features[:, 1].astype(np.uint16)
-        out.green = features[:, 2].astype(np.uint16)
-        out.blue = features[:, 3].astype(np.uint16)
+    # Preserve original (non-normalized) intensity and RGB from source LAS.
+    # Use subsample_orig_indices so each reconstructed point gets attributes
+    # from the exact representative source point used during voxel subsampling.
+    if hasattr(las, 'intensity'):
+        out.intensity = np.asarray(las.intensity)[subsample_orig_indices].astype(np.uint16)
+    if hasattr(las, 'red') and hasattr(las, 'green') and hasattr(las, 'blue'):
+        out.red = np.asarray(las.red)[subsample_orig_indices].astype(np.uint16)
+        out.green = np.asarray(las.green)[subsample_orig_indices].astype(np.uint16)
+        out.blue = np.asarray(las.blue)[subsample_orig_indices].astype(np.uint16)
 
     out.add_extra_dim(
         laspy.ExtraBytesParams(name="semantic_label", type=np.int32))

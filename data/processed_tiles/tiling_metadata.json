@@ -1,13 +1,13 @@
 {
-    "src": "data/raw_las/Fh_parking_outside_subsampled.las",
+    "src": "data/raw_las/Fh_parking_outside_2025-09-19-17-08-32_Section_Section_normal.las",
     "dst": "data/processed_tiles",
     "block_size": 20.0,
     "stride": 10.0,
-    "min_points": 100,
+    "min_points": 200,
     "coord_shift": [
-        49.091536542267285,
-        35.49935226305158,
-        8.21539315776239
+        44.59768090460653,
+        36.6785659876257,
+        4.754623370769843
     ],
     "voxel_size": 0.05,
     "features_schema": [
