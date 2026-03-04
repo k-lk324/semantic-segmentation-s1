@@ -70,6 +70,7 @@ def main():
     # Load preprocessing metadata to validate grid_size consistency
     grid_size = args.grid_size
     metadata_path = os.path.join(args.data_dir, "tiling_metadata.json")
+    global_shift = None
     if os.path.exists(metadata_path):
         try:
             with open(metadata_path, 'r') as f:
@@ -82,6 +83,8 @@ def main():
                     )
                 else:
                     grid_size = prep_voxel_size
+                # Extract global shift to restore absolute coordinates
+                global_shift = metadata.get('coord_shift', None)
             print(f"[Info] Loaded preprocessing metadata from {metadata_path}")
         except Exception as e:
             print(f"[Warning] Could not read metadata: {e}")
@@ -89,6 +92,14 @@ def main():
         print(
             f"[Warning] No preprocessing metadata found at {metadata_path}. "
             f"Using grid_size={grid_size} (ensure it matches preprocessing VOXEL_SIZE)"
+        )
+
+    if global_shift is not None:
+        global_shift = torch.tensor(global_shift, dtype=torch.float32).to(device)
+        print(f"[Info] Using global coordinate shift: {global_shift.cpu().numpy()}")
+    else:
+        print(
+            f"[Warning] No global shift found. Using relative coordinates (may affect inference quality)."
         )
 
     with torch.no_grad():
@@ -99,6 +110,13 @@ def main():
             if not torch.is_tensor(coord):
                 coord = torch.from_numpy(coord)
             coord = coord.float().to(device)
+
+            # Restore absolute coordinates for model inference
+            # The model was trained on absolute positions, not tile-relative ones
+            if global_shift is not None:
+                coord_absolute = coord + global_shift
+            else:
+                coord_absolute = coord
 
             raw_feat = data["features"]
             if not torch.is_tensor(raw_feat):
@@ -115,15 +133,23 @@ def main():
                 intensity = raw_feat[:, :
                                      1]  # Take first channel (intensity) only
 
-            input_feat = torch.cat([coord, intensity], dim=1)
+            # Use absolute coordinates consistently for both features and grid
+            # This matches how the model was trained on its original dataset
+            input_feat = torch.cat([coord_absolute, intensity], dim=1)
 
-            # Use grid_size from preprocessing (validated against metadata if available)
-            grid_coord = torch.div(coord, grid_size,
+            # Compute grid coordinates from absolute coordinates
+            # This ensures spatial coherence across tiles
+            grid_coord = torch.div(coord_absolute, grid_size,
                                    rounding_mode='floor').int()
+
+            # Ensure non-negative grid coordinates
+            grid_coord_min = grid_coord.min(dim=0).values
+            grid_coord_offset = torch.maximum(-grid_coord_min, torch.tensor(0, dtype=torch.int64).to(device))
+            grid_coord = grid_coord + grid_coord_offset
 
             offset = torch.IntTensor([coord.shape[0]]).to(device)
 
-            input_dict = dict(coord=coord,
+            input_dict = dict(coord=coord_absolute,
                               grid_coord=grid_coord,
                               feat=input_feat,
                               offset=offset)

@@ -7,6 +7,26 @@ from tqdm import tqdm
 
 from src.preprocessing.tile_utils import voxel_grid_subsampling, extract_features, VOXEL_SIZE
 
+# nuScenes semantic segmentation classes
+CLASS_NAMES = {
+    0: "barrier",
+    1: "bicycle",
+    2: "bus",
+    3: "car",
+    4: "construction_vehicle",
+    5: "motorcycle",
+    6: "pedestrian",
+    7: "traffic_cone",
+    8: "trailer",
+    9: "truck",
+    10: "driveable_surface",
+    11: "other_flat",
+    12: "sidewalk",
+    13: "terrain",
+    14: "manmade",
+    15: "vegetation",
+}
+
 
 def softmax(x):
     x = x - np.max(x, axis=1, keepdims=True)
@@ -115,7 +135,8 @@ def main():
     unique, counts = np.unique(labels[valid], return_counts=True)
     for cls, count in zip(unique, counts):
         percentage = 100 * count / np.sum(valid)
-        print(f"  Class {cls:2d}: {count:7,} points ({percentage:5.1f}%)")
+        class_name = CLASS_NAMES.get(cls, "unknown")
+        print(f"  Class {cls:2d} ({class_name:25s}): {count:7,} points ({percentage:5.1f}%)")
 
 
 if __name__ == "__main__":

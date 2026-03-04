@@ -1,13 +1,13 @@
 {
-    "src": "data/raw_las/dummy_pointcloud.las",
+    "src": "data/raw_las/Fh_parking_outside_subsampled.las",
     "dst": "data/processed_tiles",
     "block_size": 20.0,
     "stride": 10.0,
     "min_points": 100,
     "coord_shift": [
-        49.41593299999998,
-        50.45293400000007,
-        25.002492000000068
+        49.091536542267285,
+        35.49935226305158,
+        8.21539315776239
     ],
     "voxel_size": 0.05,
     "features_schema": [

@@ -32,7 +32,7 @@ tile:
 		-v $(shell pwd):/workspace/project \
 		$(IMAGE_NAME) \
 		python src/preprocessing/tile_s1.py \
-		--src data/raw_las/dummy_pointcloud.las \
+		--src data/raw_las/Fh_parking_outside_subsampled.las \
 		--dst data/processed_tiles \
 		--min_points 100
 
@@ -58,7 +58,7 @@ reconstruct:
 	docker run --rm --user 1003:1003 \
 		-v $(shell pwd):/workspace/project \
 		$(IMAGE_NAME) python scripts/vote_and_reconstruct.py \
-		--src_las data/raw_las/dummy_pointcloud.las \
+		--src_las data/raw_las/Fh_parking_outside_subsampled.las \
 		--tiles_dir data/processed_tiles \
 		--pred_dir data/predictions \
 		--num_classes 16 \
