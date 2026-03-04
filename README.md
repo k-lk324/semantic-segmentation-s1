@@ -110,6 +110,47 @@ make reconstruct
 | 14       | manmade               | Buildings, walls, structures        |
 | 15       | vegetation            | Trees, bushes                       |
 
+## Class Remapping for Out-of-Domain Data
+
+Due to domain shift, the model often concentrates predictions in 3-4 classes while leaving 12+ classes nearly empty (<1% each). **Common issue:** Roads/parking lots are frequently misclassified as "truck" (class 9).
+
+### Recommended 4-Class Remapping
+
+For parking lot or static scans, collapse the 16 classes into 4 semantically meaningful superclasses:
+
+```python
+# Add to vote_and_reconstruct.py after prediction
+SUPERCLASS_MAP = {
+    # 0: Driveable (roads, parking lots - includes misclassified truck)
+    'driveable': [9, 10, 11],  # truck, driveable_surface, other_flat
+    
+    # 1: Structure (buildings, walls, barriers)
+    'structure': [0, 14],  # barrier, manmade
+    
+    # 2: Walkable (sidewalks, paths, terrain)
+    'walkable': [12, 13],  # sidewalk, terrain
+    
+    # 3: Objects (vehicles, people, cones, vegetation)
+    'objects': [1, 2, 3, 4, 5, 6, 7, 8, 15]  # all other classes
+}
+
+# Apply remapping (class ID → superclass ID)
+superclass_mapping = np.array([1, 3, 3, 3, 3, 3, 3, 3, 3, 0, 0, 0, 2, 2, 1, 3])
+predicted_label = superclass_mapping[predicted_label]
+```
+
+**Why this works:**
+- **Merges truck (9) into driveable (0):** Compensates for road→truck misclassification
+- **Groups functionally similar classes:** All ground surfaces together, all structures together
+- **Eliminates noise:** Most vehicle classes have <0.1% representation and are unreliable
+- **Clean visualization:** 4 distinct categories instead of 16 mostly-empty ones
+
+**Expected distribution after remapping:**
+- Driveable: ~45% (parking lots, roads)
+- Structure: ~48% (buildings, walls)
+- Walkable: ~6% (sidewalks)
+- Objects: <1% (sparse detections)
+
 ## Configuration Variables
 
 Edit defaults in [Makefile](Makefile) or override per command:
@@ -165,8 +206,8 @@ make reconstruct
 
 ### Classes Concentrated in Few Categories
 **Symptom:** 95%+ points in manmade/driveable/truck, other classes <1%  
-**Cause:** Domain shift (model trained on road scenes, tested on different domain)  
-**Solution:** Consider class remapping for your use case (e.g., merge into 4 superclasses)
+**Cause:** Domain shift (model trained on road scenes, tested on different domain). Roads often misclassified as truck.  
+**Solution:** Use class remapping (see [Class Remapping section](#class-remapping-for-out-of-domain-data)) to collapse 16 classes into 4 meaningful superclasses.
 
 ### Inference Crashes with Grid Errors
 **Symptom:** RuntimeError about spatial shape or negative indices  
