@@ -27,6 +27,35 @@ CLASS_NAMES = {
     15: "vegetation",
 }
 
+# Superclass mapping: 16 nuScenes classes → 4 superclasses
+# Index = original class ID, value = superclass ID
+# Rationale: truck misclassifies road, so merge with driveable
+SUPERCLASS_MAPPING = np.array([
+    1,  # 0: barrier → structure
+    3,  # 1: bicycle → objects
+    3,  # 2: bus → objects
+    3,  # 3: car → objects
+    3,  # 4: construction_vehicle → objects
+    3,  # 5: motorcycle → objects
+    3,  # 6: pedestrian → objects
+    3,  # 7: traffic_cone → objects
+    3,  # 8: trailer → objects
+    0,  # 9: truck → driveable (misclassifies roads)
+    0,  # 10: driveable_surface → driveable
+    0,  # 11: other_flat → driveable
+    2,  # 12: sidewalk → walkable
+    2,  # 13: terrain → walkable
+    1,  # 14: manmade → structure
+    3,  # 15: vegetation → objects
+])
+
+SUPERCLASS_NAMES = {
+    0: "driveable",
+    1: "structure",
+    2: "walkable",
+    3: "objects",
+}
+
 
 def softmax(x):
     x = x - np.max(x, axis=1, keepdims=True)
@@ -103,6 +132,11 @@ def main():
 
     labels = np.full(N, -1, dtype=np.int32)
     labels[valid] = np.argmax(global_probs[valid], axis=1)
+    
+    # Apply superclass remapping (16 classes → 4 superclasses)
+    # This merges truck with driveable (truck misclassifies roads)
+    labels_remapped = np.full(N, -1, dtype=np.int32)
+    labels_remapped[valid] = SUPERCLASS_MAPPING[labels[valid]]
 
     out = laspy.LasData(las.header)
     out.points = laspy.ScaleAwarePointRecord.zeros(len(coords),
@@ -123,7 +157,7 @@ def main():
 
     out.add_extra_dim(
         laspy.ExtraBytesParams(name="semantic_label", type=np.int32))
-    out.semantic_label = labels
+    out.semantic_label = labels_remapped
 
     out.write(args.output_las)
     
@@ -133,12 +167,19 @@ def main():
     print(f"  Total points: {len(coords):,}")
     print(f"  Points with predictions: {np.sum(valid):,} ({100*np.sum(valid)/len(coords):.1f}%)")
     
-    print(f"\nClass distribution:")
+    print(f"\nOriginal class distribution (16 nuScenes classes):")
     unique, counts = np.unique(labels[valid], return_counts=True)
     for cls, count in zip(unique, counts):
         percentage = 100 * count / np.sum(valid)
         class_name = CLASS_NAMES.get(cls, "unknown")
         print(f"  Class {cls:2d} ({class_name:25s}): {count:7,} points ({percentage:5.1f}%)")
+    
+    print(f"\nRemapped superclass distribution (4 classes in output LAS):")
+    unique_super, counts_super = np.unique(labels_remapped[valid], return_counts=True)
+    for cls, count in zip(unique_super, counts_super):
+        percentage = 100 * count / np.sum(valid)
+        class_name = SUPERCLASS_NAMES.get(cls, "unknown")
+        print(f"  Class {cls:1d} ({class_name:12s}): {count:8,} points ({percentage:5.1f}%)")
 
 
 if __name__ == "__main__":
