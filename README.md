@@ -43,7 +43,7 @@ make tile SRC_LAS=data/other_scan.las TILE_MIN_POINTS=500
 - Applies 0.05m voxel grid subsampling
 - Extracts overlapping blocks (avoids edge effects)
 - Centers coordinates per tile
-- Saves as `.pth` with metadata (grid_id, global_shift, subsample_indices)
+- Saves as `.pth` with metadata (grid_id, global_shift, indices)
 
 ### 2. Inference
 
@@ -77,7 +77,7 @@ make reconstruct
 **What it does:**
 - Loads predictions for all tiles
 - Applies softmax to logits
-- Majority voting for overlapping regions
+- softmax voting for overlapping regions
 - Preserves original RGB colors and intensity
 - Outputs [data/reconstructed.las](data/reconstructed.las) with `semantic_label` field
 

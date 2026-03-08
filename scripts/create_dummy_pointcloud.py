@@ -20,8 +20,8 @@ def create_dummy_pointcloud(output_path, num_points=10000, seed=42):
     """
     np.random.seed(seed)
     
-    # Create a new LAS file
-    las = laspy.create()
+    # Create a new LAS file with a point format that supports RGB (format 2)
+    las = laspy.create(point_format=2)
     
     # Generate random points within a reasonable range (e.g., 100x100x50 meters)
     x = np.random.uniform(0, 100, num_points)

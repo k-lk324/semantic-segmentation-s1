@@ -11,9 +11,9 @@ try:
 except ImportError:
     from tile_utils import extract_features, voxel_grid_subsampling, VOXEL_SIZE
 
-DEFAULT_BLOCK_SIZE = 20.0
-DEFAULT_STRIDE = 10.0  # 50% of block size
-MIN_POINTS = 1000
+DEFAULT_BLOCK_SIZE = 30.0
+DEFAULT_STRIDE = 15.0  # 50% of block size
+MIN_POINTS = 200
 
 
 def save_metadata(output_dir: Path, args: argparse.Namespace,

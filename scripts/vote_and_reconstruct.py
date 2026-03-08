@@ -76,12 +76,18 @@ def main():
     las = laspy.read(args.src_las)
 
     coords = np.column_stack((las.x, las.y, las.z)).astype(np.float64)
+    # Center coordinates before voxel subsampling to match tiling behavior
+    coord_shift = coords.mean(axis=0)
+    coords -= coord_shift
+
     features = extract_features(las, len(coords))
     orig_indices = np.arange(len(coords), dtype=np.int64)
 
     print("[Rebuild] Applying voxel subsampling...")
     coords, features, subsample_orig_indices = voxel_grid_subsampling(
         coords, features, orig_indices, VOXEL_SIZE)
+    # Restore original coordinate frame after subsampling
+    coords += coord_shift
 
     N = coords.shape[0]
     C = args.num_classes

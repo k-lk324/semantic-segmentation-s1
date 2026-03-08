@@ -4,6 +4,15 @@ FEATURE_MODE ?= zero
 BLEND_ALPHA ?= 0.5
 SRC_LAS ?= data/raw_las/Fh_parking_outside_2025-09-19-17-08-32_Section_Section_normal.las
 TILE_MIN_POINTS ?= 200
+SIM_VELODYNE ?= 0
+VELODYNE_TOL ?= 0.1
+
+# Conditional logic to append the Velodyne flags if enabled
+ifeq ($(SIM_VELODYNE), 1)
+	VELODYNE_FLAGS = --sim_velodyne --velodyne_tol $(VELODYNE_TOL)
+else
+	VELODYNE_FLAGS =
+endif
 
 # Host paths
 HOST_LIBCUDA = /lib/x86_64-linux-gnu/libcuda.so.1
@@ -58,8 +67,8 @@ infer:
 		--data_dir data/processed_tiles \
 		--feature_mode $(FEATURE_MODE) \
 		--blend_alpha $(BLEND_ALPHA) \
+		$(VELODYNE_FLAGS) \
 		--output_dir data/predictions
-
 reconstruct:
 	docker run --rm --user 1003:1003 \
 		-v $(shell pwd):/workspace/project \
