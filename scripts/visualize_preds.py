@@ -26,14 +26,14 @@ def main():
     else:
         preds = logits.cpu().numpy()
 
-    # NuScenes typical PTv3 classes: 4 is Car, 11 is Driveable Surface, 16 is Vegetation
+    # NuScenes PTv3 classes are 0-based: 3=car, 10=driveable_surface, 15=vegetation
     # Let's create an array of gray colors for everything
     colors = np.full((coord.shape[0], 3), 0.5) # Default Gray
 
     # Highlight specific classes
-    cars_mask = (preds == 4) | (preds == 3) | (preds == 10) # Cars, Buses, Trucks
-    road_mask = (preds == 11) | (preds == 13) # Road, Sidewalk
-    veg_mask = (preds == 16) # Vegetation
+    cars_mask = (preds == 3) | (preds == 2) | (preds == 9) # Cars, Buses, Trucks
+    road_mask = (preds == 10) | (preds == 12) # Driveable surface, Sidewalk
+    veg_mask = (preds == 15) # Vegetation
 
     colors[veg_mask] = [0.1, 0.5, 0.1] # Dark Green
     colors[road_mask] = [0.2, 0.2, 0.2] # Dark Gray/Black
@@ -41,7 +41,7 @@ def main():
 
     print(f"Found {cars_mask.sum()} points classified as vehicles.")
 
-    # Downsample for matplotlib speed (only if it's huge, 30x30m might be fine, but just in case)
+    # Downsample for matplotlib speed
     if coord.shape[0] > 50000:
         step = coord.shape[0] // 50000
         coord = coord[::step]
