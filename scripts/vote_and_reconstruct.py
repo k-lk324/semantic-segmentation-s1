@@ -2,6 +2,7 @@ import torch
 import numpy as np
 import laspy
 import argparse
+import copy
 from pathlib import Path
 from tqdm import tqdm
 
@@ -40,7 +41,7 @@ SUPERCLASS_MAPPING = np.array([
     3,  # 6: pedestrian → objects
     3,  # 7: traffic_cone → objects
     3,  # 8: trailer → objects
-    0,  # 9: truck → driveable (misclassifies roads)
+    3,  # 9: truck → objects
     0,  # 10: driveable_surface → driveable
     0,  # 11: other_flat → driveable
     2,  # 12: sidewalk → walkable
@@ -69,8 +70,16 @@ def main():
     parser.add_argument("--tiles_dir", required=True)
     parser.add_argument("--pred_dir", required=True)
     parser.add_argument("--num_classes", type=int, required=True)
-    parser.add_argument("--output_las", required=True)
+    parser.add_argument("--output_las", required=True,
+                        help="Output LAS path for remapped superclass labels (4 classes)")
+    parser.add_argument("--output_las_original", default=None,
+                        help="Optional output LAS path for original nuScenes labels (16 classes)")
     args = parser.parse_args()
+
+    output_remapped_path = Path(args.output_las)
+    output_original_path = Path(args.output_las_original) if args.output_las_original else output_remapped_path.with_name(
+        f"{output_remapped_path.stem}_original_classes{output_remapped_path.suffix}"
+    )
 
     print("[Load] Reading original LAS...")
     las = laspy.read(args.src_las)
@@ -144,32 +153,41 @@ def main():
     labels_remapped = np.full(N, -1, dtype=np.int32)
     labels_remapped[valid] = SUPERCLASS_MAPPING[labels[valid]]
 
-    out = laspy.LasData(las.header)
-    out.points = laspy.ScaleAwarePointRecord.zeros(len(coords),
-                                                   header=las.header)
-    out.x = coords[:, 0]
-    out.y = coords[:, 1]
-    out.z = coords[:, 2]
-    
-    # Preserve original (non-normalized) intensity and RGB from source LAS.
-    # Use subsample_orig_indices so each reconstructed point gets attributes
-    # from the exact representative source point used during voxel subsampling.
-    if hasattr(las, 'intensity'):
-        out.intensity = np.asarray(las.intensity)[subsample_orig_indices].astype(np.uint16)
-    if hasattr(las, 'red') and hasattr(las, 'green') and hasattr(las, 'blue'):
-        out.red = np.asarray(las.red)[subsample_orig_indices].astype(np.uint16)
-        out.green = np.asarray(las.green)[subsample_orig_indices].astype(np.uint16)
-        out.blue = np.asarray(las.blue)[subsample_orig_indices].astype(np.uint16)
+    def build_output_las(semantic_labels):
+        out_header = copy.deepcopy(las.header)
+        out = laspy.LasData(out_header)
+        out.points = laspy.ScaleAwarePointRecord.zeros(len(coords),
+                                                       header=out_header)
+        out.x = coords[:, 0]
+        out.y = coords[:, 1]
+        out.z = coords[:, 2]
 
-    out.add_extra_dim(
-        laspy.ExtraBytesParams(name="semantic_label", type=np.int32))
-    out.semantic_label = labels_remapped
+        # Preserve original (non-normalized) intensity and RGB from source LAS.
+        # Use subsample_orig_indices so each reconstructed point gets attributes
+        # from the exact representative source point used during voxel subsampling.
+        if hasattr(las, 'intensity'):
+            out.intensity = np.asarray(las.intensity)[subsample_orig_indices].astype(np.uint16)
+        if hasattr(las, 'red') and hasattr(las, 'green') and hasattr(las, 'blue'):
+            out.red = np.asarray(las.red)[subsample_orig_indices].astype(np.uint16)
+            out.green = np.asarray(las.green)[subsample_orig_indices].astype(np.uint16)
+            out.blue = np.asarray(las.blue)[subsample_orig_indices].astype(np.uint16)
 
-    out.write(args.output_las)
+        if "semantic_label" not in set(out.point_format.dimension_names):
+            out.add_extra_dim(
+                laspy.ExtraBytesParams(name="semantic_label", type=np.int32))
+        out.semantic_label = semantic_labels
+        return out
+
+    out_original = build_output_las(labels)
+    out_original.write(output_original_path)
+
+    out_remapped = build_output_las(labels_remapped)
+    out_remapped.write(output_remapped_path)
     
     # Print statistics
     print(f"\nReconstruction complete!")
-    print(f"  Output: {args.output_las}")
+    print(f"  Output (original classes): {output_original_path}")
+    print(f"  Output (remapped classes): {output_remapped_path}")
     print(f"  Total points: {len(coords):,}")
     print(f"  Points with predictions: {np.sum(valid):,} ({100*np.sum(valid)/len(coords):.1f}%)")
     

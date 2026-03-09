@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import argparse
 import numpy as np
 
-def simulate_velodyne_mask(coords, tolerance=0.2, device="cpu"):
+def simulate_velodyne_mask(coords, tolerance=0.03, device="cpu"):
     """The exact same masking function from your inference script."""
     velodyne_angles = torch.linspace(10.67, -30.67, 32, device=device)
     centered_coords = coords - coords.mean(dim=0)

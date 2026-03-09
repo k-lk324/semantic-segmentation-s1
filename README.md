@@ -14,7 +14,11 @@ make infer    # Run semantic segmentation
 make reconstruct  # Merge predictions into full point cloud
 ```
 
-Output: [data/reconstructed.las](data/reconstructed.las) with `semantic_label` field (visualize in CloudCompare).
+Outputs:
+- [data/reconstructed.las](data/reconstructed.las): remapped 4-class labels
+- [data/reconstructed_original_classes.las](data/reconstructed_original_classes.las): original 16-class labels
+
+Both files include the `semantic_label` field (visualize in CloudCompare).
 
 ## Pipeline Overview
 
@@ -79,10 +83,12 @@ make reconstruct
 - Applies softmax to logits
 - softmax voting for overlapping regions
 - Preserves original RGB colors and intensity
-- Outputs [data/reconstructed.las](data/reconstructed.las) with `semantic_label` field
+- Writes two reconstructed LAS files with identical geometry/attributes:
+  - [data/reconstructed.las](data/reconstructed.las): remapped 4-class labels
+  - [data/reconstructed_original_classes.las](data/reconstructed_original_classes.las): original 16-class labels
 
 **Visualization in CloudCompare:**
-1. Open `data/reconstructed.las`
+1. Open either [data/reconstructed.las](data/reconstructed.las) or [data/reconstructed_original_classes.las](data/reconstructed_original_classes.las)
 2. Select point cloud in DB Tree
 3. Edit → Scalar Fields → Select `semantic_label`
 4. The segmentation shows as colors
@@ -118,26 +124,7 @@ Due to domain shift, the model often concentrates predictions in 3-4 classes whi
 
 For parking lot or static scans, collapse the 16 classes into 4 semantically meaningful superclasses:
 
-```python
-# Add to vote_and_reconstruct.py after prediction
-SUPERCLASS_MAP = {
-    # 0: Driveable (roads, parking lots - includes misclassified truck)
-    'driveable': [9, 10, 11],  # truck, driveable_surface, other_flat
-    
-    # 1: Structure (buildings, walls, barriers)
-    'structure': [0, 14],  # barrier, manmade
-    
-    # 2: Walkable (sidewalks, paths, terrain)
-    'walkable': [12, 13],  # sidewalk, terrain
-    
-    # 3: Objects (vehicles, people, cones, vegetation)
-    'objects': [1, 2, 3, 4, 5, 6, 7, 8, 15]  # all other classes
-}
-
-# Apply remapping (class ID → superclass ID)
-superclass_mapping = np.array([1, 3, 3, 3, 3, 3, 3, 3, 3, 0, 0, 0, 2, 2, 1, 3])
-predicted_label = superclass_mapping[predicted_label]
-```
+The remapping is already applied in [scripts/vote_and_reconstruct.py](scripts/vote_and_reconstruct.py) and written to [data/reconstructed.las](data/reconstructed.las). The original 16-class output is preserved in [data/reconstructed_original_classes.las](data/reconstructed_original_classes.las).
 
 **Why this works:**
 - **Merges truck (9) into driveable (0):** Compensates for road→truck misclassification
@@ -158,6 +145,8 @@ Edit defaults in [Makefile](Makefile) or override per command:
 | Variable          | Default              | Description                                      |
 |-------------------|----------------------|--------------------------------------------------|
 | `SRC_LAS`         | Section_normal.las   | Input LAS file for tiling                        |
+| `RECON_OUT_REMAPPED` | data/reconstructed.las | Reconstructed LAS with 4 remapped classes      |
+| `RECON_OUT_ORIGINAL` | data/reconstructed_original_classes.las | Reconstructed LAS with original 16 classes |
 | `TILE_MIN_POINTS` | 200                  | Minimum points per tile (filters empty regions)  |
 | `FEATURE_MODE`    | zero                 | Input features: intensity/zero/height/blend      |
 | `BLEND_ALPHA`     | 0.5                  | Blending weight for blend mode (0.0-1.0)         |
@@ -168,6 +157,9 @@ Edit defaults in [Makefile](Makefile) or override per command:
 make tile SRC_LAS=data/scan2.las
 make infer FEATURE_MODE=intensity
 make reconstruct
+
+# Customize output locations
+make reconstruct RECON_OUT_REMAPPED=data/out_4class.las RECON_OUT_ORIGINAL=data/out_16class.las
 
 # Try height features with lower threshold
 make tile TILE_MIN_POINTS=100

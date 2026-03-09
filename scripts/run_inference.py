@@ -41,28 +41,35 @@ def load_checkpoint(model, path, map_location="cuda"):
 
 
 def simulate_velodyne_mask(coords, tolerance=0.15, device="cuda"):
-    """
-    Simulates a 32-beam Velodyne HDL-32E scanner.
-    Calculates the elevation angle of each point and keeps only those 
-    that align with the 32 specific laser firing angles.
-    """
-    # HDL-32E vertical angles: +10.67 down to -30.67 degrees
+    """Simulates a 32-beam Velodyne HDL-32E scanner (Vertical & Horizontal Sparsity)"""
     velodyne_angles = torch.linspace(10.67, -30.67, 32, device=device)
-    
-    # Center the coordinates so the virtual scanner is in the middle of the tile
     centered_coords = coords - coords.mean(dim=0)
     
-    # Calculate range (r) and elevation angle (theta)
     r = torch.norm(centered_coords, dim=1) + 1e-6 
     z = centered_coords[:, 2]
     elevation = torch.asin(z / r) * (180.0 / torch.pi)
     
-    # Find distance to the closest Velodyne ring angle
     angle_diffs = torch.abs(elevation.unsqueeze(1) - velodyne_angles.unsqueeze(0))
     min_diffs, _ = torch.min(angle_diffs, dim=1)
     
-    # Create mask of points that fall within the beam tolerance
+    # 1. Vertical Ring Mask
     mask = min_diffs < tolerance
+    
+    # --- NEW: 2. Horizontal Sparsity (Dotting the lines) ---
+    # A typical nuScenes frame has ~30,000 to 40,000 points. 
+    # If our mask currently keeps way more than that, it's too dense horizontally.
+    num_kept_points = mask.sum().item()
+    target_points = 35000 
+    
+    if num_kept_points > target_points:
+        # Calculate the probability of keeping a point to hit our target
+        keep_prob = target_points / num_kept_points
+        # Create a random dropout mask
+        random_drop = torch.rand(mask.shape, device=device) < keep_prob
+        # Combine the masks: It must be on the ring AND survive the random drop
+        mask = mask & random_drop
+    # -------------------------------------------------------
+    
     return mask
 
 
@@ -278,7 +285,7 @@ def main():
             # --- NEW: UPSAMPLE PREDICTIONS BACK TO DENSE CLOUD ---
             if args.sim_velodyne and mask.sum() > 10:
                 # We use KDTree on CPU to quickly map sparse predictions back to all dense points
-                dense_xyz = coord.cpu().numpy()
+                dense_xyz = shifted_coord.cpu().numpy()
                 sparse_xyz = model_coord.cpu().numpy()
                 
                 tree = cKDTree(sparse_xyz)

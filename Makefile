@@ -3,6 +3,8 @@ DATA_DIR = $(PWD)/data
 FEATURE_MODE ?= zero
 BLEND_ALPHA ?= 0.5
 SRC_LAS ?= data/raw_las/Fh_parking_outside_2025-09-19-17-08-32_Section_Section_normal.las
+RECON_OUT_REMAPPED ?= data/reconstructed.las
+RECON_OUT_ORIGINAL ?= data/reconstructed_original_classes.las
 TILE_MIN_POINTS ?= 200
 SIM_VELODYNE ?= 0
 VELODYNE_TOL ?= 0.1
@@ -77,4 +79,32 @@ reconstruct:
 		--tiles_dir data/processed_tiles \
 		--pred_dir data/predictions \
 		--num_classes 16 \
-		--output_las data/reconstructed.las
+		--output_las $(RECON_OUT_REMAPPED) \
+		--output_las_original $(RECON_OUT_ORIGINAL)
+
+check_tile:
+    docker run --rm --user 1003:1003 \
+        -v $(shell pwd):/workspace/project \
+        $(IMAGE_NAME) \
+        python scripts/check_tile.py --tile data/processed_tiles/Fh_parking_outside_2025-09-19-17-08-32_Section_Section_normal_tile_0000.pth
+
+viz_3d:
+    docker run --rm --user 1003:1003 \
+        -v $(shell pwd):/workspace/project \
+        $(IMAGE_NAME) \
+        python scripts/save_3d_view_safe.py --tile data/processed_tiles/Fh_parking_outside_2025-09-19-17-08-32_Section_Section_normal_tile_0000.pth --output raw_tile_view.png
+
+viz_preds:
+    docker run --rm --user 1003:1003 \
+        -v $(shell pwd):/workspace/project \
+        $(IMAGE_NAME) \
+        python scripts/visualize_preds.py \
+        --input_tile data/processed_tiles/Fh_parking_outside_2025-09-19-17-08-32_Section_Section_normal_tile_0000.pth \
+        --pred_tile data/predictions/Fh_parking_outside_2025-09-19-17-08-32_Section_Section_normal_tile_0000.pth \
+        --output parking_lot_predictions.png
+
+export_ply:
+    docker run --rm --user 1003:1003 \
+        -v $(shell pwd):/workspace/project \
+        $(IMAGE_NAME) \
+        python scripts/pth_to_ply.py --input data/processed_tiles/ --output_dir data/labeled_plys
