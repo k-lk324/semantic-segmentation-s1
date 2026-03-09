@@ -7,7 +7,7 @@ from tqdm import tqdm
 from pathlib import Path
 import sys
 import numpy as np
-from scipy.spatial import cKDTree # Added for mapping predictions back
+from scipy.spatial import cKDTree
 
 # Add Pointcept to path
 sys.path.insert(0, "/workspace/libs/Pointcept")
@@ -114,6 +114,11 @@ def main():
     # -------------------------------------------
 
     args = parser.parse_args()
+    
+    os.makedirs(args.data_dir, exist_ok=True) 
+    config_path = os.path.join(args.data_dir, "run_config.json")
+    with open(config_path, "w") as f:
+        json.dump(vars(args), f, indent=4)
 
     if not 0.0 <= args.blend_alpha <= 1.0:
         raise ValueError(f"blend_alpha must be between 0 and 1, got {args.blend_alpha}")

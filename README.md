@@ -120,23 +120,30 @@ make reconstruct
 
 Due to domain shift, the model often concentrates predictions in 3-4 classes while leaving 12+ classes nearly empty (<1% each). **Common issue:** Roads/parking lots are frequently misclassified as "truck" (class 9).
 
-### Recommended 4-Class Remapping
+### Automatic 4-Class Remapping
 
-For parking lot or static scans, collapse the 16 classes into 4 semantically meaningful superclasses:
+Predictions are automatically collapsed from 16 nuScenes classes into 4 semantically meaningful **superclasses**:
 
-The remapping is already applied in [scripts/vote_and_reconstruct.py](scripts/vote_and_reconstruct.py) and written to [data/reconstructed.las](data/reconstructed.las). The original 16-class output is preserved in [data/reconstructed_original_classes.las](data/reconstructed_original_classes.las).
+| Superclass | ID | Mapped Classes | Notes |
+|------------|----|----|-------|
+| **ground** | 2 | driveable_surface, other_flat, sidewalk, terrain | Roads, parking lots, surfaces |
+| **structure** | 3 | manmade | Buildings, walls, infrastructure |
+| **object** | 1 | barrier, bicycle, bus, car, construction_vehicle, motorcycle, pedestrian, traffic_cone, trailer, truck | All vehicles and movable objects |
+| **vegetation** | 0 | vegetation | Trees, bushes, plants |
 
-**Why this works:**
-- **Merges truck (9) into driveable (0):** Compensates for road→truck misclassification
-- **Groups functionally similar classes:** All ground surfaces together, all structures together
-- **Eliminates noise:** Most vehicle classes have <0.1% representation and are unreliable
-- **Clean visualization:** 4 distinct categories instead of 16 mostly-empty ones
+The remapping is automatically applied in [scripts/vote_and_reconstruct.py](scripts/vote_and_reconstruct.py) and written to [data/reconstructed.las](data/reconstructed.las). The full 16-class output is also preserved in [data/reconstructed_original_classes.las](data/reconstructed_original_classes.las) for reference.
+
+**Why 4-class remapping works better:**
+- **Compensates for domain shift:** Trucks and vehicles are merged into one "object" class, avoiding misclassification issues
+- **Groups functionally similar classes:** All ground surfaces together, structures together
+- **Reduces noise:** Most vehicle classes have <0.1% representation in out-of-domain scans
+- **Clean visualization:** 4 distinct, reliable categories instead of 16 mostly-empty classes
 
 **Expected distribution after remapping:**
-- Driveable: ~45% (parking lots, roads)
-- Structure: ~48% (buildings, walls)
-- Walkable: ~6% (sidewalks)
-- Objects: <1% (sparse detections)
+- Ground: ~40-50% (parking lots, roads, sidewalks, terrain)
+- Structure: ~45-55% (buildings, walls)
+- Object: <1% (sparse detections)
+- Vegetation: <5% (sparse detections)
 
 ## Configuration Variables
 
@@ -185,26 +192,73 @@ make reconstruct
 
 ## Troubleshooting
 
-### Large Objects Classified as Trucks
-**Symptom:** Buildings, walls, or large surfaces predicted as truck (14% or more)  
-**Cause:** Intensity domain shift  
-**Solution:** Use `FEATURE_MODE=zero` instead of `intensity`
+### Domain Shift Issues
+**Symptom:** Model concentrates predictions in 2-3 classes (e.g., >90% ground/structure), other classes <1%  
+**Cause:** Model trained on nuScenes automotive scenes; domain gap when applied to different contexts  
+**Solution:** 
+  1. Use `FEATURE_MODE=zero` (geometry-only) instead of intensity
+  2. Rely on 4-class remapped output ([data/reconstructed.las](data/reconstructed.las)) instead of 16-class original
+  3. Review troubleshooting section on [Domain Adaptation Challenges](#domain-adaptation-challenges)
 
 ### Low Coverage in Reconstruction
 **Symptom:** Reconstruction has fewer points than original  
-**Cause:** Voxel subsampling (0.05m) reduces density  
+**Cause:** Voxel subsampling (0.05m) reduces point density  
 **Expected:** ~70% coverage for typical automotive-density scans  
-**Note:** Reconstruction preserves indices to map predictions back to original points
+**Note:** Reconstruction preserves indices to map predictions back to original points; subsampling is intentional for balanced training
 
-### Classes Concentrated in Few Categories
-**Symptom:** 95%+ points in manmade/driveable/truck, other classes <1%  
-**Cause:** Domain shift (model trained on road scenes, tested on different domain). Roads often misclassified as truck.  
-**Solution:** Use class remapping (see [Class Remapping section](#class-remapping-for-out-of-domain-data)) to collapse 16 classes into 4 meaningful superclasses.
+### Intensity domain shift causing systematic bias
+**Symptom:** Different sensors produce very different predictions on similar geometry  
+**Cause:** LiDAR intensity is sensor-specific; model overfits to intensity patterns from nuScenes  
+**Solution:** Use `FEATURE_MODE=zero` for geometry-only inference (recommended for new domains)
 
 ### Inference Crashes with Grid Errors
 **Symptom:** RuntimeError about spatial shape or negative indices  
 **Cause:** Coordinate range incompatible with sparse convolution  
-**Note:** This should be fixed (GRID_OFFSET applied). If still occurs, check coordinate magnitude in tiles.
+**Solution:** Check that coordinates are reasonable (within ±1e5 range). Tiling should handle centering automatically via `coord_shift`.
+
+### Tiles not being processed
+**Symptom:** Tiling completes but `data/processed_tiles/` is empty  
+**Cause:** All tiles fell below `TILE_MIN_POINTS` threshold  
+**Solution:** Lower `TILE_MIN_POINTS` (default 200) or check source LAS file for insufficient point density
+
+## Visualization & Export
+
+### Generate Prediction Visualization
+Create 2D visualizations of tile predictions (overlaid on raw point cloud):
+
+```bash
+make viz_preds
+```
+
+Outputs PNG images to `results_figs/` showing predictions per tile.
+
+### Generate 3D View of Single Tile
+Visualize geometry and predictions for a specific tile:
+
+```bash
+make viz_3d
+```
+
+Default tile: `Fh_parking_outside_2025-09-19-17-08-32_Section_Section_normal_tile_0050.pth`
+Output: `raw_tile_view.png`
+
+### Export Tiles to PLY Format
+Convert processed tiles to PLY format for external viewers:
+
+```bash
+make export_ply
+```
+
+Outputs labeled point clouds to `data/labeled_plys/`
+
+### Inspect Tile Metadata
+Check tile structure and properties:
+
+```bash
+make check_tile
+```
+
+Default tile: `Fh_parking_outside_2025-09-19-17-08-32_Section_Section_normal_tile_0050.pth`
 
 ## Development
 
@@ -213,17 +267,17 @@ make reconstruct
 make dev
 ```
 
-**Inspect tile contents:**
-```bash
-docker run --rm --user $(id -u):$(id -g) -v $(pwd):/workspace/project \
-  s1-segmentation python scripts/inspect_tile.py data/processed_tiles/tile_0000.pth
-```
-
 **Create synthetic test data:**
 ```bash
 docker run --rm --user $(id -u):$(id -g) -v $(pwd):/workspace/project \
   s1-segmentation python scripts/create_dummy_pointcloud.py \
   --output data/test.las --num-points 50000
+```
+
+**Run Python scripts interactively:**
+```bash
+make dev
+python scripts/visualize_preds.py --input_dir data/processed_tiles --pred_dir data/predictions --output_dir results_figs
 ```
 
 ## Model Configuration

@@ -30,31 +30,31 @@ CLASS_NAMES = {
 
 # Superclass mapping: 16 nuScenes classes → 4 superclasses
 # Index = original class ID, value = superclass ID
-# Rationale: truck misclassifies road, so merge with driveable
+# Superclass IDs: 0=vegetation, 1=object, 2=ground, 3=structure
 SUPERCLASS_MAPPING = np.array([
-    1,  # 0: barrier → structure
-    3,  # 1: bicycle → objects
-    3,  # 2: bus → objects
-    3,  # 3: car → objects
-    3,  # 4: construction_vehicle → objects
-    3,  # 5: motorcycle → objects
-    3,  # 6: pedestrian → objects
-    3,  # 7: traffic_cone → objects
-    3,  # 8: trailer → objects
-    3,  # 9: truck → objects
-    0,  # 10: driveable_surface → driveable
-    0,  # 11: other_flat → driveable
-    2,  # 12: sidewalk → walkable
-    2,  # 13: terrain → walkable
-    1,  # 14: manmade → structure
-    3,  # 15: vegetation → objects
+    1,  # 0: barrier → object
+    1,  # 1: bicycle → object
+    1,  # 2: bus → object
+    1,  # 3: car → object
+    1,  # 4: construction_vehicle → object
+    1,  # 5: motorcycle → object
+    1,  # 6: pedestrian → object
+    1,  # 7: traffic_cone → object
+    1,  # 8: trailer → object
+    1,  # 9: truck → object
+    2,  # 10: driveable_surface → ground
+    2,  # 11: other_flat → ground
+    2,  # 12: sidewalk → ground
+    2,  # 13: terrain → ground
+    3,  # 14: manmade → structure
+    0,  # 15: vegetation → vegetation
 ])
 
 SUPERCLASS_NAMES = {
-    0: "driveable",
-    1: "structure",
-    2: "walkable",
-    3: "objects",
+    0: "vegetation",
+    1: "object",
+    2: "ground",
+    3: "structure",
 }
 
 
@@ -75,15 +75,6 @@ def main():
     parser.add_argument("--output_las_original", default=None,
                         help="Optional output LAS path for original nuScenes labels (16 classes)")
     args = parser.parse_args()
-
-    output_remapped_path = Path(args.output_las)
-    output_original_path = Path(args.output_las_original) if args.output_las_original else output_remapped_path.with_name(
-        f"{output_remapped_path.stem}_original_classes{output_remapped_path.suffix}"
-    )
-
-    print("[Load] Reading original LAS...")
-    las = laspy.read(args.src_las)
-
     coords = np.column_stack((las.x, las.y, las.z)).astype(np.float64)
     # Center coordinates before voxel subsampling to match tiling behavior
     coord_shift = coords.mean(axis=0)

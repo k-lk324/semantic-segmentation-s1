@@ -3,22 +3,17 @@ import matplotlib.pyplot as plt
 import argparse
 import numpy as np
 import os
+from pathlib import Path
+from tqdm import tqdm
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--input_tile", required=True, help="Path to original .pth tile (data/processed_tiles/...)")
-    parser.add_argument("--pred_tile", required=True, help="Path to prediction .pth tile (data/predictions/...)")
-    parser.add_argument("--output", default="prediction_view.png", help="Output image name")
-    args = parser.parse_args()
-
-    print(f"Loading input coordinates from: {args.input_tile}")
-    data = torch.load(args.input_tile, weights_only=False)
+def visualize_single_tile(input_tile_path, pred_tile_path, output_path):
+    """Visualize predictions for a single tile."""
+    data = torch.load(input_tile_path, weights_only=False)
     coord = data["coord"]
     if torch.is_tensor(coord):
         coord = coord.cpu().numpy()
 
-    print(f"Loading model predictions from: {args.pred_tile}")
-    logits = torch.load(args.pred_tile, weights_only=False)
+    logits = torch.load(pred_tile_path, weights_only=False)
     
     # Convert logits to class IDs
     if logits.ndim > 1:
@@ -39,8 +34,6 @@ def main():
     colors[road_mask] = [0.2, 0.2, 0.2] # Dark Gray/Black
     colors[cars_mask] = [1.0, 0.0, 0.0] # BRIGHT RED
 
-    print(f"Found {cars_mask.sum()} points classified as vehicles.")
-
     # Downsample for matplotlib speed
     if coord.shape[0] > 50000:
         step = coord.shape[0] // 50000
@@ -54,13 +47,59 @@ def main():
     # Plot X and Y (Top-down view)
     ax.scatter(coord[:, 0], coord[:, 1], c=colors, s=2.0, alpha=0.9, edgecolors='none')
     
-    ax.set_title(f"Model Predictions (Red = Vehicle)\nVehicles found: {cars_mask.sum()}", fontsize=14)
+    tile_name = Path(input_tile_path).stem
+    ax.set_title(f"{tile_name}\nVehicles: {cars_mask.sum()}", fontsize=12)
     ax.axis('equal') # Keep scale 1:1
 
-    print(f"Saving to {args.output}...")
-    plt.savefig(args.output, bbox_inches='tight')
+    plt.savefig(output_path, bbox_inches='tight')
     plt.close(fig)
-    print("Done!")
+    
+    return cars_mask.sum()
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input_dir", required=True, help="Directory with original .pth tiles (data/processed_tiles/)")
+    parser.add_argument("--pred_dir", required=True, help="Directory with prediction .pth tiles (data/predictions/)")
+    parser.add_argument("--output_dir", required=True, help="Output directory for visualization images")
+    args = parser.parse_args()
+
+    input_dir = Path(args.input_dir)
+    pred_dir = Path(args.pred_dir)
+    output_dir = Path(args.output_dir)
+    
+    # Create output directory if it doesn't exist
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Find all input tiles
+    input_tiles = sorted(input_dir.glob("*.pth"))
+    
+    print(f"Found {len(input_tiles)} tiles to visualize")
+    print(f"Output directory: {output_dir}")
+    
+    total_vehicles = 0
+    processed = 0
+    
+    for input_tile_path in tqdm(input_tiles, desc="Visualizing tiles"):
+        pred_tile_path = pred_dir / input_tile_path.name
+        
+        if not pred_tile_path.exists():
+            print(f"\nWarning: Prediction not found for {input_tile_path.name}, skipping...")
+            continue
+        
+        output_path = output_dir / f"{input_tile_path.stem}.png"
+        
+        try:
+            vehicle_count = visualize_single_tile(str(input_tile_path), str(pred_tile_path), str(output_path))
+            total_vehicles += vehicle_count
+            processed += 1
+        except Exception as e:
+            print(f"\nError processing {input_tile_path.name}: {e}")
+            continue
+    
+    print(f"\nVisualization complete!")
+    print(f"  Processed: {processed}/{len(input_tiles)} tiles")
+    print(f"  Total vehicles detected: {total_vehicles:,}")
+    print(f"  Output saved to: {output_dir}")
 
 if __name__ == "__main__":
     main()

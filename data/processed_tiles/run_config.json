@@ -1,0 +1,11 @@
+{
+    "config": "configs/s1_inference.py",
+    "weights": "weights/ptv3_nuscenes.pth",
+    "data_dir": "data/processed_tiles",
+    "output_dir": "data/predictions",
+    "feature_mode": "zero",
+    "blend_alpha": 0.5,
+    "grid_size": 0.05,
+    "sim_velodyne": true,
+    "velodyne_tol": 0.15
+}
