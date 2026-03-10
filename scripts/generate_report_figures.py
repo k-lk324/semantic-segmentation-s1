@@ -8,7 +8,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-from matplotlib.patches import FancyArrowPatch, Rectangle
+from matplotlib.patches import FancyArrowPatch, Patch, Rectangle
 
 matplotlib.use("Agg")
 
@@ -135,8 +135,8 @@ def make_tiling_grid(src_las: Path, tiling_meta_path: Path, out_path: Path):
                 block_size,
                 fill=False,
                 edgecolor="#ef6c00",
-                linewidth=0.45,
-                alpha=0.45,
+                linewidth=0.85,
+                alpha=0.5,
             )
             ax.add_patch(rect)
 
@@ -145,7 +145,17 @@ def make_tiling_grid(src_las: Path, tiling_meta_path: Path, out_path: Path):
     for (gx, gy), label in zip(highlighted, labels):
         rect = Rectangle((gx, gy), block_size, block_size, fill=False, edgecolor="#c62828", linewidth=1.6)
         ax.add_patch(rect)
-        ax.text(gx + 1.0, gy + block_size - 1.2, label, color="#c62828", fontsize=8, weight="bold")
+        ax.text(
+            gx + 1.2,
+            gy + block_size - 1.8,
+            label,
+            color="#c62828",
+            fontsize=10,
+            weight="bold",
+            va="top",
+            bbox={"boxstyle": "round,pad=0.2", "facecolor": "white", "edgecolor": "none", "alpha": 0.9},
+            zorder=6,
+        )
 
     ax.set_title(f"Tiling grid ({block_size:.0f}m block, {stride:.0f}m stride)")
     ax.set_xlabel("X")
@@ -245,7 +255,7 @@ def remap_16_to_4(pred16: np.ndarray) -> np.ndarray:
 
 
 def pick_comparison_tile_name(results_ablation_dir: Path):
-    preferred = "Fh_parking_outside_2025-09-19-17-08-32_Section_Section_normal_tile_0050.pth"
+    preferred = "Fh_parking_outside_2025-09-19-17-08-32_Section_Section_normal_tile_0020.pth"
     config_dirs = [
         results_ablation_dir / "config1_baseline",
         results_ablation_dir / "config2_zero",
@@ -276,7 +286,7 @@ def plot_semantic(ax, x, y, labels4, title):
     for cls_id, color in cmap.items():
         color_arr[labels4 == cls_id] = color
     ax.scatter(x, y, c=color_arr, s=1.2, alpha=0.9, linewidths=0)
-    ax.set_title(title, fontsize=10)
+    ax.set_title(title, fontsize=11)
     ax.set_aspect("equal")
     ax.set_xticks([])
     ax.set_yticks([])
@@ -294,14 +304,9 @@ def make_qualitative_comparison(processed_tiles_dir: Path, results_ablation_dir:
     idx = subsample_indices(coord.shape[0], max_points=180_000, seed=9)
     x = coord[idx, 0]
     y = coord[idx, 1]
-    z = coord[idx, 2]
 
-    fig, axes = plt.subplots(1, 5, figsize=(18, 4.2), dpi=180)
-    axes[0].scatter(x, y, c=z, cmap="viridis", s=1.1, alpha=0.9, linewidths=0)
-    axes[0].set_title("Raw geometry", fontsize=10)
-    axes[0].set_aspect("equal")
-    axes[0].set_xticks([])
-    axes[0].set_yticks([])
+    fig = plt.figure(figsize=(12.8, 9.2), dpi=180)
+    gs = fig.add_gridspec(2, 2, hspace=0.16, wspace=0.10)
 
     config_dirs = [
         ("Baseline", results_ablation_dir / "config1_baseline"),
@@ -310,15 +315,26 @@ def make_qualitative_comparison(processed_tiles_dir: Path, results_ablation_dir:
         ("Rings 0.03°", results_ablation_dir / "config4_velodyne_thin"),
     ]
 
-    for ax, (title, cdir) in zip(axes[1:], config_dirs):
+    positions = [(0, 0), (0, 1), (1, 0), (1, 1)]
+    for (row, col), (title, cdir) in zip(positions, config_dirs):
+        ax = fig.add_subplot(gs[row, col])
         logits = torch.load(cdir / tile_name, map_location="cpu", weights_only=False)
         pred16 = torch.argmax(logits, dim=1).cpu().numpy()
         pred4 = remap_16_to_4(pred16)
         pred4 = pred4[idx]
         plot_semantic(ax, x, y, pred4, title)
 
-    fig.suptitle(f"Qualitative comparison on {tile_name.replace('.pth', '')}", fontsize=11)
-    plt.tight_layout()
+    # Add legend for semantic classes
+    legend_elements = [
+        Patch(facecolor=SUPERCLASS_COLORS["vegetation"], label="Vegetation"),
+        Patch(facecolor=SUPERCLASS_COLORS["object"], label="Object"),
+        Patch(facecolor=SUPERCLASS_COLORS["ground"], label="Ground"),
+        Patch(facecolor=SUPERCLASS_COLORS["structure"], label="Structure"),
+    ]
+    fig.legend(handles=legend_elements, loc="lower center", ncol=4, frameon=False, fontsize=11, bbox_to_anchor=(0.5, 0.02))
+
+    fig.suptitle("Qualitative comparison", fontsize=14, weight="bold", x=0.5, y=0.985, ha="center")
+    fig.subplots_adjust(left=0.04, right=0.98, top=0.90, bottom=0.12)
     fig.savefig(out_path, bbox_inches="tight")
     plt.close(fig)
 
@@ -344,13 +360,25 @@ def make_ablation_miou(results_dir: Path, out_path: Path):
     ax.set_xticklabels(labels)
     ax.set_ylabel("mIoU (%)")
     ax.set_title("Ablation mIoU comparison")
+    max_bar = max(max(miou16), max(miou4))
+    ax.set_ylim(0, max_bar + 3.0)
+    ax.set_axisbelow(True)
     ax.grid(axis="y", alpha=0.25)
     ax.legend(frameon=False)
 
     for bars in (b1, b2):
         for bar in bars:
             h = bar.get_height()
-            ax.text(bar.get_x() + bar.get_width() / 2, h + 0.35, f"{h:.2f}", ha="center", va="bottom", fontsize=8)
+            ax.text(
+                bar.get_x() + bar.get_width() / 2,
+                h + 0.55,
+                f"{h:.2f}",
+                ha="center",
+                va="bottom",
+                fontsize=9.5,
+                bbox={"boxstyle": "round,pad=0.15", "facecolor": "white", "edgecolor": "none", "alpha": 0.9},
+                zorder=5,
+            )
 
     plt.tight_layout()
     fig.savefig(out_path, bbox_inches="tight")
