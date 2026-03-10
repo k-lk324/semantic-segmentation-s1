@@ -6,6 +6,10 @@ from plyfile import PlyData
 from sklearn.metrics import confusion_matrix
 import glob
 import os
+import json
+import csv
+
+from class_mappings import SUPERCLASS_MAPPING, SUPERCLASS_NAMES
 
 # The classes we expect you to have labeled based on nuScenes
 CLASS_NAMES = {
@@ -19,10 +23,10 @@ CLASS_NAMES = {
 
 def load_gt_labels(ply_path):
     plydata = PlyData.read(ply_path)
-    if 'segmentation' not in plydata.elements[0].data.dtype.names:
-        print(f"[Warning] No 'segmentation' field found in {ply_path}.")
+    if 'scalar_segmentation' not in plydata.elements[0].data.dtype.names:
+        print(f"[Warning] No 'scalar_segmentation' field found in {ply_path}.")
         return None
-    return np.array(plydata.elements[0].data['segmentation'], dtype=np.int32)
+    return np.array(plydata.elements[0].data['scalar_segmentation'], dtype=np.int32)
 
 def load_pred_labels(pth_path):
     logits = torch.load(pth_path, weights_only=False)
@@ -37,6 +41,7 @@ def main():
     parser.add_argument("--gt_dir", required=True, help="Folder containing your hand-labeled .ply files")
     parser.add_argument("--pred_dir", required=True, help="Folder containing the model's prediction .pth files")
     parser.add_argument("--output_csv", type=str, default=None, help="Force a specific CSV name (optional)")
+    parser.add_argument("--remap", action="store_true", help="Remap 16 classes to 4 superclasses before evaluation")
     args = parser.parse_args()
 
     # --- AUTO-DETECT CONFIGURATION FOR CSV NAMING ---
@@ -90,7 +95,33 @@ def main():
     y_true = np.concatenate(all_gt)
     y_pred = np.concatenate(all_pred)
 
-    valid_mask = (y_true > 0)
+    # Apply remapping if requested
+    if args.remap:
+        print("[Info] Applying 4-class superclass remapping...\n")
+        # Remap predictions (0-15 → 0-3)
+        y_pred_remapped = np.zeros_like(y_pred)
+        for i in range(16):
+            mask = (y_pred == i)
+            y_pred_remapped[mask] = SUPERCLASS_MAPPING[i]
+        y_pred = y_pred_remapped
+        
+        # Remap ground truth (handle only labeled classes)
+        # Use -1 to mark unlabeled regions initially
+        y_true_remapped = np.full_like(y_true, -1)
+        label_map = {3: 1, 9: 1, 10: 2, 14: 3, 15: 0}  # car, truck→object; driveable→ground; manmade→structure; vegetation→vegetation
+        for orig_class, superclass in label_map.items():
+            mask = (y_true == orig_class)
+            y_true_remapped[mask] = superclass
+        # Keep original unlabeled/ignore regions as-is
+        y_true_remapped[y_true < 0] = y_true[y_true < 0]
+        y_true = y_true_remapped
+    
+    # In remap mode, class 0 (vegetation) is valid, so filter out only negative values
+    # In original mode, filter out class 0 and negative values
+    if args.remap:
+        valid_mask = (y_true >= 0)
+    else:
+        valid_mask = (y_true > 0)
     y_true_valid = y_true[valid_mask]
     y_pred_valid = y_pred[valid_mask]
 
@@ -103,7 +134,10 @@ def main():
     iou_list, precision_list, recall_list, name_list = [], [], [], []
 
     for i, class_id in enumerate(present_classes):
-        name = CLASS_NAMES.get(class_id, f"Class {class_id}")
+        if args.remap:
+            name = SUPERCLASS_NAMES.get(class_id, f"Class {class_id}")
+        else:
+            name = CLASS_NAMES.get(class_id, f"Class {class_id}")
         
         tp = cm[i, i]
         fp = cm[:, i].sum() - tp

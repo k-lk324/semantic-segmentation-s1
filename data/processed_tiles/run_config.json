@@ -7,5 +7,5 @@
     "blend_alpha": 0.5,
     "grid_size": 0.05,
     "sim_velodyne": true,
-    "velodyne_tol": 0.15
+    "velodyne_tol": 0.03
 }

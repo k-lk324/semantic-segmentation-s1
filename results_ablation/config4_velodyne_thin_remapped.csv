@@ -1,0 +1,7 @@
+Class Name,IoU (%),Precision (%),Recall (%)
+vegetation,14.64,29.00,22.83
+object,0.90,0.99,8.87
+ground,10.43,20.04,17.87
+structure,36.23,53.49,52.89
+
+Mean IoU,15.55,,

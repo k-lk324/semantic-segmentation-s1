@@ -1,0 +1,8 @@
+Class Name,IoU (%),Precision (%),Recall (%)
+Car,0.02,0.74,0.02
+Truck,0.53,0.53,93.63
+Driveable Surface,0.02,7.78,0.02
+Manmade,20.33,70.32,22.23
+Vegetation,0.00,0.00,0.00
+
+Mean IoU,4.18,,
