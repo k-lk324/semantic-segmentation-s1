@@ -12,7 +12,7 @@ from matplotlib.patches import FancyArrowPatch, Rectangle
 
 matplotlib.use("Agg")
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parent.parent
 
 CONFIGS = [
     ("Config 1", "config1_baseline", "config1_baseline_remapped"),
