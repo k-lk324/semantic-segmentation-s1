@@ -3,11 +3,11 @@ import csv
 import json
 from pathlib import Path
 
-# import laspy
+import laspy
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
-# import torch
+import torch
 from matplotlib.patches import FancyArrowPatch, Rectangle
 
 matplotlib.use("Agg")
@@ -232,7 +232,6 @@ def make_class_legend(out_path: Path):
                   weight="bold",
                   pad=10)
     ncols = 4
-    nrows = 4
     left_margin = 0.03
     top = 0.92
     x_step = 0.24
@@ -678,21 +677,55 @@ def main():
                         type=str,
                         default=str(ROOT),
                         help="Project root")
+    parser.add_argument(
+        "--include_scene",
+        action="store_true",
+        help=
+        "Also generate scene overview and tiling-grid figures from LAS + tiling metadata",
+    )
+    parser.add_argument(
+        "--include_pipeline",
+        action="store_true",
+        help="Also generate the method pipeline schematic",
+    )
+    parser.add_argument(
+        "--include_qualitative",
+        action="store_true",
+        help=
+        "Also generate qualitative comparison figure (requires predictions + processed tiles)",
+    )
     args = parser.parse_args()
 
     root = Path(args.root).resolve()
     figures_dir = root / "figures"
     figures_dir.mkdir(parents=True, exist_ok=True)
 
-    # tiling_meta = root / "data" / "processed_tiles" / "tiling_metadata.json"
-    # with tiling_meta.open("r", encoding="utf-8") as f:
-    #     meta = json.load(f)
-    # src_las = root / meta["src"]
+    if args.include_scene:
+        tiling_meta = root / "data" / "processed_tiles" / "tiling_metadata.json"
+        if not tiling_meta.exists():
+            print(f"[Warning] Missing metadata file: {tiling_meta}")
+        else:
+            with tiling_meta.open("r", encoding="utf-8") as f:
+                meta = json.load(f)
+            src_rel = meta.get("src")
+            if not src_rel:
+                print(
+                    f"[Warning] No 'src' entry in {tiling_meta}; skipping scene figures"
+                )
+            else:
+                src_las = root / src_rel
+                if not src_las.exists():
+                    print(f"[Warning] Missing source LAS file: {src_las}")
+                else:
+                    make_scene_overview(src_las,
+                                        figures_dir / "scene_overview.png")
+                    make_tiling_grid(src_las, tiling_meta,
+                                     figures_dir / "tiling_grid.png")
 
-    # make_scene_overview(src_las, figures_dir / "scene_overview.png")
-    # make_tiling_grid(src_las, tiling_meta, figures_dir / "tiling_grid.png")
     make_class_legend(figures_dir / "class_legend.png")
-    # make_method_pipeline(figures_dir / "method_pipeline.png")
+    if args.include_pipeline:
+        make_method_pipeline(figures_dir / "method_pipeline.png")
+
     make_ablation_miou(root / "results_ablation",
                        figures_dir / "ablation_miou.png")
     make_classwise_iou(root / "results_ablation",
@@ -703,11 +736,12 @@ def main():
                              figures_dir / "best_config_prf.png")
     write_analysis_tables(root / "results_ablation",
                           figures_dir / "analysis_tables.tex")
-    # make_qualitative_comparison(
-    #     root / "data" / "processed_tiles",
-    #     root / "results_ablation",
-    #     figures_dir / "qualitative_comparison.png",
-    # )
+    if args.include_qualitative:
+        make_qualitative_comparison(
+            root / "data" / "processed_tiles",
+            root / "results_ablation",
+            figures_dir / "qualitative_comparison.png",
+        )
 
     print("Generated figures:")
     for p in sorted(figures_dir.glob("*.png")):
