@@ -11,9 +11,9 @@ try:
 except ImportError:
     from tile_utils import extract_features, voxel_grid_subsampling, VOXEL_SIZE
 
-DEFAULT_BLOCK_SIZE = 20.0
-DEFAULT_STRIDE = 10.0  # 50% of block size
-MIN_POINTS = 1000
+DEFAULT_BLOCK_SIZE = 30.0
+DEFAULT_STRIDE = 15.0  # 50% of block size
+MIN_POINTS = 200
 
 
 def save_metadata(output_dir: Path, args: argparse.Namespace,
@@ -58,9 +58,12 @@ def process_file(file_path: Path,
     print(f"  [Info] Centered data. Shift: {coord_shift}")
 
     # Apply voxel filter to standardize density
-    coords, features = voxel_grid_subsampling(coords,
-                                              features,
-                                              voxel_size=VOXEL_SIZE)
+    orig_indices = np.arange(coords.shape[0], dtype=np.int64)
+
+    coords, features, voxel_indices = voxel_grid_subsampling(coords,
+                                                       features,
+                                                       orig_indices,
+                                                       voxel_size=VOXEL_SIZE)
 
     max_coord = coords.max(axis=0)
     min_coord = coords.min(axis=0)  # Re-calc min after shift/subsample
@@ -81,6 +84,7 @@ def process_file(file_path: Path,
 
         strip_coords = coords[x_mask]
         strip_feats = features[x_mask]
+        strip_indices = voxel_indices[x_mask]
 
         for y in grid_y:
             y_mask = (strip_coords[:, 1] >= y) & (strip_coords[:, 1]
@@ -90,6 +94,7 @@ def process_file(file_path: Path,
 
             block_coords = strip_coords[y_mask].astype(np.float32)
             block_feats = strip_feats[y_mask]
+            block_indices = strip_indices[y_mask]
 
             block_center_z = float(block_coords[:, 2].mean())
             block_center = np.array(
@@ -100,6 +105,7 @@ def process_file(file_path: Path,
             save_dict = {
                 "coord": block_coords,
                 "features": block_feats,
+                "indices": block_indices,
                 "grid_id": np.array([x, y, block_center_z], dtype=np.float32),
                 "global_shift": coord_shift.astype(np.float32),
                 "name": f"{filename}_tile_{count:04d}"

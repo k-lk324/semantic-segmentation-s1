@@ -1,9 +1,9 @@
 {
-    "src": "data/raw_las/fh_parking.las",
-    "dst": "data/processed_tiles/",
-    "block_size": 20.0,
-    "stride": 10.0,
-    "min_points": 1000,
+    "src": "data/raw_las/Fh_parking_outside_2025-09-19-17-08-32_Section_Section_normal.las",
+    "dst": "data/processed_tiles",
+    "block_size": 30.0,
+    "stride": 15.0,
+    "min_points": 200,
     "coord_shift": [
         44.59768090460653,
         36.6785659876257,
