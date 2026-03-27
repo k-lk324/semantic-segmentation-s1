@@ -12,13 +12,13 @@ def inspect(tile_path):
     grid_id = data['grid_id']
     global_shift = data['global_shift']
 
-    print(f"1. Structure Check:")
+    print("1. Structure Check:")
     print(f"   - Point Count: {coords.shape[0]}")
     print(f"   - Features Shape: {feats.shape}")
     print(f"   - Global Shift used: {global_shift}")
 
     # Check 1: Normalization
-    print(f"\n2. Feature Check (Should be approx [-1, 1]):")
+    print("\n2. Feature Check (Should be approx [-1, 1]):")
     print(
         f"   - Intensity: Min {feats[:, 0].min():.3f}, Max {feats[:, 0].max():.3f}"
     )
@@ -30,7 +30,7 @@ def inspect(tile_path):
     # Check 2: Voxel Subsampling
     # Calculate density. If voxel size is 0.05m, points shouldn't be closer than 0.05m roughly.
     # Note: Barycenters can technically be closer, but average density should be lower.
-    print(f"\n3. Geometry Check:")
+    print("\n3. Geometry Check:")
     print(f"   - Tile Center: {coords.mean(axis=0)}")
     print(
         f"   - Bounds X: [{coords[:, 0].min():.2f}, {coords[:, 0].max():.2f}]")
@@ -45,6 +45,7 @@ def inspect(tile_path):
     plt.savefig(tile_path.with_suffix('.png'))
     plt.close()
 
+
 if __name__ == "__main__":
     import argparse
 
@@ -56,4 +57,3 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     inspect(Path(args.tile_path))
-

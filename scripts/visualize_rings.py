@@ -1,22 +1,8 @@
 import torch
 import matplotlib.pyplot as plt
 import argparse
-import numpy as np
+from lidar_utils import simulate_velodyne_mask
 
-def simulate_velodyne_mask(coords, tolerance=0.03, device="cpu"):
-    """The exact same masking function from your inference script."""
-    velodyne_angles = torch.linspace(10.67, -30.67, 32, device=device)
-    centered_coords = coords - coords.mean(dim=0)
-    
-    r = torch.norm(centered_coords, dim=1) + 1e-6 
-    z = centered_coords[:, 2]
-    elevation = torch.asin(z / r) * (180.0 / torch.pi)
-    
-    angle_diffs = torch.abs(elevation.unsqueeze(1) - velodyne_angles.unsqueeze(0))
-    min_diffs, _ = torch.min(angle_diffs, dim=1)
-    
-    mask = min_diffs < tolerance
-    return mask, elevation
 
 def unroll_point_cloud(coords):
     """Calculates Azimuth (horizontal angle) for the X-axis of our image."""
@@ -27,16 +13,24 @@ def unroll_point_cloud(coords):
     azimuth = torch.atan2(y, x) * (180.0 / torch.pi)
     return azimuth
 
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--tile", required=True, help="Path to a single .pth tile")
-    parser.add_argument("--tol", type=float, default=0.2, help="Velodyne tolerance")
-    parser.add_argument("--output", default="ring_visualization.png", help="Output image name")
+    parser.add_argument("--tile",
+                        required=True,
+                        help="Path to a single .pth tile")
+    parser.add_argument("--tol",
+                        type=float,
+                        default=0.2,
+                        help="Velodyne tolerance")
+    parser.add_argument("--output",
+                        default="ring_visualization.png",
+                        help="Output image name")
     args = parser.parse_args()
 
     print(f"Loading tile: {args.tile}")
     data = torch.load(args.tile, weights_only=False)
-    
+
     coord = data["coord"]
     if not torch.is_tensor(coord):
         coord = torch.from_numpy(coord)
@@ -44,7 +38,12 @@ def main():
 
     print("Calculating projections and applying mask...")
     azimuth = unroll_point_cloud(coord)
-    mask, elevation = simulate_velodyne_mask(coord, tolerance=args.tol)
+    mask, elevation = simulate_velodyne_mask(
+        coord,
+        tolerance=args.tol,
+        device="cpu",
+        return_elevation=True,
+    )
 
     # Convert to numpy for matplotlib
     azimuth_np = azimuth.cpu().numpy()
@@ -56,13 +55,19 @@ def main():
 
     # Plot 1: The Raw FJD Data
     axs[0].scatter(azimuth_np, elevation_np, s=0.1, c='grey', alpha=0.5)
-    axs[0].set_title("1. Raw FJD Point Cloud (Dense & Unstructured)", fontsize=14)
+    axs[0].set_title("1. Raw FJD Point Cloud (Dense & Unstructured)",
+                     fontsize=14)
     axs[0].set_ylabel("Elevation Angle (Degrees)")
     axs[0].set_facecolor('black')
 
     # Plot 2: The Simulated Velodyne Data
-    axs[1].scatter(azimuth_np[mask_np], elevation_np[mask_np], s=0.1, c='cyan', alpha=0.8)
-    axs[1].set_title(f"2. Simulated Velodyne 32-Beam (Tolerance: {args.tol}°)", fontsize=14)
+    axs[1].scatter(azimuth_np[mask_np],
+                   elevation_np[mask_np],
+                   s=0.1,
+                   c='cyan',
+                   alpha=0.8)
+    axs[1].set_title(f"2. Simulated Velodyne 32-Beam (Tolerance: {args.tol}°)",
+                     fontsize=14)
     axs[1].set_xlabel("Azimuth Angle (Degrees)")
     axs[1].set_ylabel("Elevation Angle (Degrees)")
     axs[1].set_facecolor('black')
@@ -74,6 +79,7 @@ def main():
     plt.tight_layout()
     plt.savefig(args.output, dpi=300, bbox_inches='tight')
     print(f"Done! Saved visualization to {args.output}")
+
 
 if __name__ == "__main__":
     main()
