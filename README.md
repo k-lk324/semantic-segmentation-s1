@@ -103,7 +103,6 @@ The model is pretrained on nuScenes automotive LiDAR.
 Recommended order:
 1. Start with FEATURE_MODE=zero.
 2. Use remapped 4-class output for downstream work.
-3. Treat small object classes as low-confidence unless fine-tuned.
 
 
 ## Visualization and Utilities
@@ -147,8 +146,25 @@ docker run --rm --user $(id -u):$(id -g) -v $(pwd):/workspace/project \
 Model config:
 - configs/s1_inference.py
 
-Weights:
+Weights
+
+The repository expects the checkpoint at:
 - weights/ptv3_nuscenes.pth
+
+The weights are not committed to git (see `.gitignore`).
+
+Download source:
+- Pointcept PTv3 model zoo on Hugging Face:
+  https://huggingface.co/Pointcept/PointTransformerV3/tree/main/nuscenes-semseg-pt-v3m1-0-base
+
+Quick download (from project root):
+```bash
+mkdir -p weights
+wget -O weights/ptv3_nuscenes.pth \
+  "https://huggingface.co/Pointcept/PointTransformerV3/resolve/main/nuscenes-semseg-pt-v3m1-0-base/model/model_best.pth"
+```
+
+If the upstream filename changes, open the Hugging Face folder above and download the latest nuScenes PTv3 checkpoint, then save it as `weights/ptv3_nuscenes.pth`.
 
 Runtime requirements:
 - Docker or Podman

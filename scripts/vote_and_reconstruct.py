@@ -112,7 +112,6 @@ def main():
     labels[valid] = np.argmax(global_probs[valid], axis=1)
 
     # Apply superclass remapping (16 classes → 4 superclasses)
-    # This merges truck with driveable (truck misclassifies roads)
     labels_remapped = np.full(N, -1, dtype=np.int32)
     labels_remapped[valid] = SUPERCLASS_MAPPING[labels[valid]]
 
