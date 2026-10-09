@@ -112,6 +112,7 @@ def print_reconstruction_summary(
     valid_mask: np.ndarray,
     output_original_path: str,
     output_remapped_path: str,
+    skipped_points_count: int = 0,
 ) -> None:
     """Print statistical breakdown of reconstruction results."""
     print("\nReconstruction complete!")
@@ -120,6 +121,8 @@ def print_reconstruction_summary(
     print(f"  Total points: {total_points:,}")
     percentage = (100.0 * valid_points_count / total_points) if total_points else 0.0
     print(f"  Points with predictions: {valid_points_count:,} ({percentage:.1f}%)")
+    if skipped_points_count > 0:
+        print(f"  Skipped tile points (unmatched indices): {skipped_points_count:,}")
 
     print("\nOriginal class distribution (16 nuScenes classes):")
     unique, counts = np.unique(labels[valid_mask], return_counts=True)
@@ -200,6 +203,7 @@ def main():
 
     tile_files = sorted(Path(args.tiles_dir).glob("*.pth"))
     valid_tiles_count = 0
+    total_skipped_tile_points = 0
 
     for tile_path in tqdm(tile_files, desc="Accumulating predictions"):
         pred_path = Path(args.pred_dir) / tile_path.name
@@ -237,6 +241,13 @@ def main():
             indices=indices,
         )
 
+        unmatched_count = len(indices) - len(mapped_indices)
+        if unmatched_count > 0:
+            total_skipped_tile_points += unmatched_count
+
+        if mapped_indices.size == 0:
+            continue
+
         if not np.all(valid_mask):
             probs = probs[valid_mask]
 
@@ -248,6 +259,10 @@ def main():
         raise ValueError("Reconstruction received 0 valid prediction tiles.")
 
     valid_global = global_counts > 0
+    if not np.any(valid_global):
+        raise ValueError(
+            "No valid predictions could be mapped to the reconstructed point cloud."
+        )
     global_probs[valid_global] /= global_counts[valid_global, None]
 
     labels = np.full(N, -1, dtype=np.int32)
@@ -284,6 +299,7 @@ def main():
         valid_mask=valid_global,
         output_original_path=output_original_path,
         output_remapped_path=output_remapped_path,
+        skipped_points_count=total_skipped_tile_points,
     )
 
 

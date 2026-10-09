@@ -55,7 +55,7 @@ CONF1_PRED="$CONF1_DIR/predictions"
 mkdir -p "$CONF1_PRED"
 echo -e "\n---> Running Config 1: Baseline (Raw + Intensity)..."
 make infer SIM_VELODYNE=0 FEATURE_MODE=intensity OUTPUT_DIR="$CONF1_PRED"
-cp "$CONF1_PRED/run_config.json" "$CONF1_DIR/run_config.json" 2>/dev/null || true
+cp "$CONF1_PRED/run_config.json" "$CONF1_DIR/run_config.json"
 
 echo "  Evaluating original 16 classes..."
 docker run --rm --user 1003:1003 \
@@ -82,7 +82,7 @@ CONF2_PRED="$CONF2_DIR/predictions"
 mkdir -p "$CONF2_PRED"
 echo -e "\n---> Running Config 2: Zeroed Intensity (Raw + Zero)..."
 make infer SIM_VELODYNE=0 FEATURE_MODE=zero OUTPUT_DIR="$CONF2_PRED"
-cp "$CONF2_PRED/run_config.json" "$CONF2_DIR/run_config.json" 2>/dev/null || true
+cp "$CONF2_PRED/run_config.json" "$CONF2_DIR/run_config.json"
 
 echo "  Evaluating original 16 classes..."
 docker run --rm --user 1003:1003 \
@@ -109,7 +109,7 @@ CONF3_PRED="$CONF3_DIR/predictions"
 mkdir -p "$CONF3_PRED"
 echo -e "\n---> Running Config 3: Thick Velodyne Rings (Tol: 0.15 + Zero)..."
 make infer SIM_VELODYNE=1 VELODYNE_TOL=0.15 FEATURE_MODE=zero OUTPUT_DIR="$CONF3_PRED"
-cp "$CONF3_PRED/run_config.json" "$CONF3_DIR/run_config.json" 2>/dev/null || true
+cp "$CONF3_PRED/run_config.json" "$CONF3_DIR/run_config.json"
 
 echo "  Evaluating original 16 classes..."
 docker run --rm --user 1003:1003 \
@@ -136,7 +136,7 @@ CONF4_PRED="$CONF4_DIR/predictions"
 mkdir -p "$CONF4_PRED"
 echo -e "\n---> Running Config 4: Razor Thin Velodyne Rings (Tol: 0.03 + Zero)..."
 make infer SIM_VELODYNE=1 VELODYNE_TOL=0.03 FEATURE_MODE=zero OUTPUT_DIR="$CONF4_PRED"
-cp "$CONF4_PRED/run_config.json" "$CONF4_DIR/run_config.json" 2>/dev/null || true
+cp "$CONF4_PRED/run_config.json" "$CONF4_DIR/run_config.json"
 
 echo "  Evaluating original 16 classes..."
 docker run --rm --user 1003:1003 \

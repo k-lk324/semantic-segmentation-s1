@@ -80,7 +80,7 @@ reconstruct:
 		$(IMAGE_NAME) python scripts/vote_and_reconstruct.py \
 		--src_las $(SRC_LAS) \
 		--tiles_dir data/processed_tiles \
-		--pred_dir data/predictions \
+		--pred_dir $(OUTPUT_DIR) \
 		--num_classes 16 \
 		--output_las $(RECON_OUT_REMAPPED) \
 		--output_las_original $(RECON_OUT_ORIGINAL)

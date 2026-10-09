@@ -11,6 +11,7 @@ from vote_and_reconstruct import (
     map_tile_indices_to_subsampled,
     validate_tile_prediction,
     ensure_output_directories,
+    print_reconstruction_summary,
 )
 
 
@@ -59,6 +60,20 @@ def test_map_tile_indices_empty_inputs():
     assert mapped_indices.size == 0
 
 
+def test_map_tile_indices_all_unmatched():
+    """Verify mapping returns empty valid mask when no indices match."""
+    sorted_orig = np.array([10, 20, 30], dtype=np.int64)
+    sorted_order = np.array([0, 1, 2], dtype=np.int64)
+    indices = np.array([40, 50, 60], dtype=np.int64)
+    valid, mapped_indices = map_tile_indices_to_subsampled(
+        sorted_orig=sorted_orig,
+        sorted_order=sorted_order,
+        indices=indices,
+    )
+    assert not np.any(valid)
+    assert mapped_indices.size == 0
+
+
 def test_validate_tile_prediction_valid():
     """Verify validation passes for matching prediction shape."""
     logits = np.zeros((50, 16), dtype=np.float32)
@@ -93,3 +108,23 @@ def test_ensure_output_directories(tmp_path):
 
     ensure_output_directories(dest)
     assert dest.parent.exists()
+
+
+def test_print_reconstruction_summary_with_skipped_points(capsys):
+    """Verify reconstruction summary includes skipped tile point counts."""
+    labels = np.array([0, 1], dtype=np.int32)
+    labels_remapped = np.array([0, 1], dtype=np.int32)
+    valid_mask = np.array([True, True], dtype=bool)
+
+    print_reconstruction_summary(
+        total_points=2,
+        valid_points_count=2,
+        labels=labels,
+        labels_remapped=labels_remapped,
+        valid_mask=valid_mask,
+        output_original_path="orig.las",
+        output_remapped_path="remap.las",
+        skipped_points_count=42,
+    )
+    captured = capsys.readouterr()
+    assert "Skipped tile points (unmatched indices): 42" in captured.out
