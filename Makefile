@@ -8,6 +8,8 @@ RECON_OUT_ORIGINAL ?= data/reconstructed_original_classes.las
 TILE_MIN_POINTS ?= 200
 SIM_VELODYNE ?= 0
 VELODYNE_TOL ?= 0.1
+OUTPUT_DIR ?= data/predictions
+SEED ?= 42
 
 # Conditional logic to append the Velodyne flags if enabled
 ifeq ($(SIM_VELODYNE), 1)
@@ -70,7 +72,8 @@ infer:
 		--feature_mode $(FEATURE_MODE) \
 		--blend_alpha $(BLEND_ALPHA) \
 		$(VELODYNE_FLAGS) \
-		--output_dir data/predictions
+		--output_dir $(OUTPUT_DIR) \
+		--seed $(SEED)
 reconstruct:
 	docker run --rm --user 1003:1003 \
 		-v $(shell pwd):/workspace/project \

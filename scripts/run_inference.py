@@ -73,21 +73,29 @@ def main():
     parser.add_argument(
         "--sim_velodyne",
         action="store_true",
-        help=
-        "Enable Spherical Downsampling to simulate Velodyne 32-beam LiDAR (mitigates domain gap)"
+        help="Enable Spherical Downsampling to simulate Velodyne 32-beam LiDAR (mitigates domain gap)"
     )
     parser.add_argument(
         "--velodyne_tol",
         type=float,
         default=0.2,
-        help=
-        "Tolerance in degrees for keeping a point near a simulated laser beam (default: 0.2)"
+        help="Tolerance in degrees for keeping a point near a simulated laser beam (default: 0.2)"
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Random seed for reproducible point sampling"
     )
 
     args = parser.parse_args()
 
-    os.makedirs(args.data_dir, exist_ok=True)
-    config_path = os.path.join(args.data_dir, "run_config.json")
+    torch.manual_seed(args.seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(args.seed)
+
+    os.makedirs(args.output_dir, exist_ok=True)
+    config_path = os.path.join(args.output_dir, "run_config.json")
     with open(config_path, "w") as f:
         json.dump(vars(args), f, indent=4)
 
